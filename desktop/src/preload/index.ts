@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     close: () => ipcRenderer.invoke('window:close'),
     toggleDock: () => ipcRenderer.invoke('window:toggleDock'),
+    checkWeChat: () => ipcRenderer.invoke('window:checkWeChat'),
     setAlwaysOnTop: (alwaysOnTop: boolean) => ipcRenderer.invoke('window:setAlwaysOnTop', alwaysOnTop)
   },
 
@@ -28,8 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ai: {
     generateReply: (context: string, style: string) => ipcRenderer.invoke('ai:generateReply', context, style),
     polishText: (text: string, style: string) => ipcRenderer.invoke('ai:polishText', text, style),
-    analyzeIntent: (chatHistory: any[]) => ipcRenderer.invoke('ai:analyzeIntent', chatHistory),
-    generateStrategy: (context: string) => ipcRenderer.invoke('ai:generateStrategy', context),
+    analyzeIntent: (chatHistory: any[], goal?: string) => ipcRenderer.invoke('ai:analyzeIntent', chatHistory, goal),
+    analyzeOverall: (chatHistory: any[], goal?: string) => ipcRenderer.invoke('ai:analyzeOverall', chatHistory, goal),
     setConfig: (config: any) => ipcRenderer.invoke('ai:setConfig', config),
     initConfig: (config: any) => ipcRenderer.invoke('ai:initConfig', config),
     testConnection: () => ipcRenderer.invoke('ai:testConnection')
@@ -47,6 +48,7 @@ declare global {
         minimize: () => Promise<void>
         close: () => Promise<void>
         toggleDock: () => Promise<boolean>
+        checkWeChat: () => Promise<boolean>
         setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<void>
       }
       clipboard: {
@@ -65,9 +67,8 @@ declare global {
       ai: {
         generateReply: (context: string, style: string) => Promise<{ style: string; reply: string }[]>
         polishText: (text: string, style: string) => Promise<string[]>
-        analyzeIntent: (chatHistory: any[]) => Promise<any>
+        analyzeIntent: (chatHistory: any[], goal?: string) => Promise<any>
         testConnection: () => Promise<{ success: boolean; model?: string; error?: string }>
-        generateStrategy: (context: string) => Promise<any>
         setConfig: (config: any) => Promise<boolean>
         initConfig: (config: any) => Promise<boolean>
       }

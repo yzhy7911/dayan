@@ -1,9 +1,9 @@
 import { registerSkill } from './skill-loader'
 
 const skill = {
-  name: '泡妞大师',
-  description: '教你如何优雅地追求女生，分析女生心理和情感需求',
-  icon: '💕',
+  name: '恋爱军师',
+  description: '专业情感分析，帮你读懂对方心意，提升聊天魅力',
+  icon: '💘',
   prompts: {
     system: `你是一位顶级情感专家，擅长分析女生的心理和聊天策略。
 

@@ -65,7 +65,11 @@ const styles = [
   { value: 'polite', label: '✨ 更礼貌' },
   { value: 'confident', label: '💪 更自信' },
   { value: 'warm', label: '💝 更温暖' },
-  { value: 'concise', label: '⚡ 更简洁' }
+  { value: 'concise', label: '⚡ 更简洁' },
+  { value: 'formal', label: '🎩 更正式' },
+  { value: 'rigorous', label: '📋 更严谨' },
+  { value: 'ambiguous', label: '🌸 更暧昧' },
+  { value: 'greenTea', label: '🍵 更绿茶' }
 ]
 
 const getStyleLabel = (style: string): string => {
@@ -73,7 +77,11 @@ const getStyleLabel = (style: string): string => {
     polite: '✨ 更礼貌',
     confident: '💪 更自信',
     warm: '💝 更温暖',
-    concise: '⚡ 更简洁'
+    concise: '⚡ 更简洁',
+    formal: '🎩 更正式',
+    rigorous: '📋 更严谨',
+    ambiguous: '🌸 更暧昧',
+    greenTea: '🍵 更绿茶'
   }
   return styleMap[style] || '✨ 默认润色'
 }
@@ -113,90 +121,134 @@ const pasteResult = async (text: string) => {
 .polish-page {
   height: 100%;
   overflow-y: auto;
-  padding: 16px;
+  padding: var(--space-4);
 }
 
+/* 输入区域 */
 .input-section {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  margin-bottom: 16px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+  box-shadow: var(--shadow-sm);
 }
 
 .input-header {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .input-label {
-  font-size: 14px;
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .input-textarea {
   width: 100%;
-  padding: 12px;
-  background: var(--bg-primary);
+  min-height: 100px;
+  padding: var(--space-3);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-md);
   color: var(--text-primary);
   resize: none;
+  outline: none;
+  transition: all var(--transition);
+  line-height: 1.6;
 }
 
+.input-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
+  background: var(--bg-primary);
+}
+
+.input-textarea::placeholder {
+  color: var(--text-placeholder);
+}
+
+/* 风格选择器 */
 .style-selector {
-  margin-top: 16px;
+  margin-top: var(--space-4);
 }
 
 .style-label {
-  font-size: 13px;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
   display: block;
+  font-weight: 500;
 }
 
 .style-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .style-btn {
   padding: 6px 14px;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 20px;
-  font-size: 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
   color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-weight: 500;
+}
+
+.style-btn:hover:not(.active) {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .style-btn.active {
-  background: var(--primary);
-  border-color: var(--primary);
+  background: var(--primary-gradient);
+  border-color: transparent;
   color: white;
+  box-shadow: var(--shadow-sm);
 }
 
+/* 润色按钮 */
 .polish-btn {
   width: 100%;
-  margin-top: 16px;
-  padding: 12px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: var(--primary-gradient);
   color: white;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-md);
   font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.polish-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .polish-btn:disabled {
   opacity: 0.5;
+  cursor: not-allowed;
 }
 
+/* 结果区域 */
 .results-header {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .results-title {
-  font-size: 14px;
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -204,42 +256,43 @@ const pasteResult = async (text: string) => {
 .results-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .result-card {
-  background: white;
-  border-radius: 12px;
-  padding: 16px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4);
   border: 2px solid var(--border-color);
-  transition: all 0.25s ease;
+  transition: all var(--transition-slow);
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
 }
 
 .result-card:hover {
   border-color: var(--primary);
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(139, 92, 246, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 .result-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-3);
 }
 
 .result-index {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--primary);
+  background: var(--primary-gradient);
   color: white;
   border-radius: 50%;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-xs);
+  font-weight: 700;
   flex-shrink: 0;
 }
 
@@ -247,56 +300,60 @@ const pasteResult = async (text: string) => {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  background: #f3e8ff;
-  color: #9333ea;
-  border-radius: 20px;
-  font-size: 11px;
+  background: var(--secondary-bg);
+  color: var(--secondary-dark);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
   font-weight: 500;
 }
 
 .result-content {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: var(--font-md);
+  line-height: 1.7;
   color: var(--text-primary);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
+  font-weight: 500;
 }
 
 .result-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .copy-btn {
   flex: 1;
-  padding: 8px 12px;
-  background: var(--bg-secondary);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition);
 }
 
 .copy-btn:hover {
   background: var(--border-color);
+  color: var(--text-primary);
 }
 
 .paste-btn {
   flex: 1;
-  padding: 8px 12px;
-  background: var(--primary);
+  padding: var(--space-2) var(--space-3);
+  background: var(--primary-gradient);
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition);
+  box-shadow: var(--shadow-sm);
 }
 
 .paste-btn:hover {
-  background: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 </style>

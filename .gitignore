@@ -42,3 +42,15 @@ Icon
 
 # Desktop.ini
 Desktop.ini
+
+# Claude local files
+.claude/
+
+# Package manager - using pnpm
+package-lock.json
+yarn.lock
+
+# Electron build outputs
+desktop/release/
+desktop/build/
+desktop/dist/

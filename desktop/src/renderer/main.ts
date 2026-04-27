@@ -3,6 +3,8 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import { router } from './router'
 import { initDatabase, getAIConfig } from './utils/storage'
+import { ContactStorage } from './utils/contact-storage'
+import './styles/theme.css'
 import './styles/global.css'
 
 console.log('[Main] 🚀 正在初始化 Vue 应用...')
@@ -10,7 +12,10 @@ console.log('[Main] 🚀 正在初始化 Vue 应用...')
 async function bootstrap() {
   try {
     // 初始化数据库
-    await initDatabase()
+    await Promise.all([
+      initDatabase(),
+      ContactStorage.init()
+    ])
     console.log('[Main] ✅ 数据库初始化完成')
 
     // 同步 AI 配置到主进程

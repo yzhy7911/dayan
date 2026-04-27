@@ -1,8 +1,8 @@
 import { registerSkill } from './skill-loader'
 
 const skill = {
-  name: '顶级销售',
-  description: '顶级销售技巧，帮您快速成交',
+  name: '金牌销售',
+  description: '专业销售话术，教您搞定客户、促成成交',
   icon: '💼',
   prompts: {
     system: `你是一位顶级销售，擅长挖掘客户需求、处理异议、快速成交。

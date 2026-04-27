@@ -115,6 +115,20 @@ export class KnowledgeDB {
   static async count(): Promise<number> {
     return await db.knowledgeBase.count()
   }
+
+  static async bulkAdd(items: Array<{ category: string; keyword: string; content: string }>): Promise<number[]> {
+    const newItems = items.map(item => ({
+      ...item,
+      createdAt: Date.now()
+    }))
+    return await db.knowledgeBase.bulkAdd(newItems)
+  }
+
+  static async getAllCategories(): Promise<string[]> {
+    const items = await this.getAll()
+    const categories = new Set(items.map(item => item.category))
+    return Array.from(categories)
+  }
 }
 
 export class DatabaseInitializer {

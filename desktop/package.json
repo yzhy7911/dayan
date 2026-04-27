@@ -1,14 +1,14 @@
 {
   "name": "dayan-desktop",
   "version": "1.0.0",
-  "description": "嗒言 - 懂你的智能聊天助手",
+  "description": "搭言 - 懂你的智能聊天助手",
   "main": "dist/main/index.js",
-  "author": "嗒言团队",
+  "author": "搭言团队",
   "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build && electron-builder",
+    "build": "vite build && electron-builder",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix"
   },
@@ -34,15 +34,19 @@
     "electron-builder": "^24.9.1",
     "eslint": "^8.56.0",
     "eslint-plugin-vue": "^9.21.1",
-    "typescript": "^5.3.3",
-    "vite": "^5.1.0",
+    "typescript": "~5.3.3",
+    "vite": "^5.4.0",
     "vite-plugin-electron": "^0.28.0",
     "vite-plugin-electron-renderer": "^0.14.5",
-    "vue-tsc": "^1.8.27"
+    "vue-tsc": "^2.0.0"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "*",
+    "@rollup/rollup-linux-arm64-gnu": "*"
   },
   "build": {
     "appId": "com.dayan.app",
-    "productName": "嗒言",
+    "productName": "搭言",
     "directories": {
       "output": "release"
     },

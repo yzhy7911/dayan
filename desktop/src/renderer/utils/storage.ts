@@ -91,3 +91,5 @@ export const searchKnowledge = KnowledgeDB.search
 export const getKnowledgeByCategory = KnowledgeDB.getByCategory
 export const updateKnowledge = KnowledgeDB.update
 export const deleteKnowledge = KnowledgeDB.delete
+export const bulkAddKnowledge = KnowledgeDB.bulkAdd
+export const getKnowledgeCategories = KnowledgeDB.getAllCategories

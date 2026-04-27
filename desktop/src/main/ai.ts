@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import axios from 'axios'
+import { logger } from './logger'
 
 interface ModelConfig {
   provider: 'openai' | 'qwen' | 'ernie'
@@ -202,6 +203,82 @@ const POLISH_PROMPTS: Record<string, PromptTemplate> = {
 - 每条之间用换行分隔
 - 直接开始写回复内容`,
     user: '请把下面这句话精简成最简短但意思不变，直接输出3条独立的结果，每条3-15字，越短越好，不要任何引导文字：\n\n"{text}"'
+  },
+  formal: {
+    system: `你是一位专业商务人士，擅长把普通的话改得更加正式规范。
+【核心原则】
+1. 保持原意不变
+2. 使用正式商务用语
+3. 用词精准专业
+4. 语气庄重得体
+5. 避免口语化表达
+6. 符合职场沟通规范
+
+【输出要求】
+- 直接输出3条独立的润色结果
+- 每条都是一个完整的句子/回复
+- 不要加任何引导文字（如"好的，这里是..."、"润色结果："等）
+- 不要加序号或编号
+- 每条之间用换行分隔
+- 直接开始写回复内容`,
+    user: '请把下面这句话改得更加正式规范，直接输出3条独立的结果，每条10-40字，不要任何引导文字：\n\n"{text}"'
+  },
+  rigorous: {
+    system: `你是一位严谨的沟通专家，擅长把模糊的话改得更加严谨周密。
+【核心原则】
+1. 保持原意不变
+2. 逻辑清晰有条理
+3. 用词精准无歧义
+4. 表达周全严谨
+5. 避免模糊不清的表述
+6. 经得起推敲
+
+【输出要求】
+- 直接输出3条独立的润色结果
+- 每条都是一个完整的句子/回复
+- 不要加任何引导文字（如"好的，这里是..."、"润色结果："等）
+- 不要加序号或编号
+- 每条之间用换行分隔
+- 直接开始写回复内容`,
+    user: '请把下面这句话改得更加严谨周密，直接输出3条独立的结果，每条10-40字，不要任何引导文字：\n\n"{text}"'
+  },
+  ambiguous: {
+    system: `你是一位情感沟通高手，擅长把直白的话改得更加暧昧有氛围感。
+【核心原则】
+1. 保持原意但增加暗示
+2. 言有尽而意无穷
+3. 营造暧昧氛围
+4. 留有想象空间
+5. 温柔且有深意
+6. 让对方心领神会
+
+【输出要求】
+- 直接输出3条独立的润色结果
+- 每条都是一个完整的句子/回复
+- 不要加任何引导文字（如"好的，这里是..."、"润色结果："等）
+- 不要加序号或编号
+- 每条之间用换行分隔
+- 直接开始写回复内容`,
+    user: '请把下面这句话改得更加暧昧有氛围感，直接输出3条独立的结果，每条10-30字，不要任何引导文字：\n\n"{text}"'
+  },
+  greenTea: {
+    system: `你是一位高情商沟通专家，擅长把直接的话改得更加"绿茶"（看似无辜实则高明）。
+【核心原则】
+1. 表面温柔无辜
+2. 实则暗含深意
+3. 语气轻柔不争
+4. 善于示弱但占理
+5. 让人无法拒绝
+6. 看似无意实则有心
+
+【输出要求】
+- 直接输出3条独立的润色结果
+- 每条都是一个完整的句子/回复
+- 不要加任何引导文字（如"好的，这里是..."、"润色结果："等）
+- 不要加序号或编号
+- 每条之间用换行分隔
+- 直接开始写回复内容`,
+    user: '请把下面这句话改得更加"绿茶"（高段位表达），直接输出3条独立的结果，每条10-30字，不要任何引导文字：\n\n"{text}"'
   }
 }
 
@@ -257,20 +334,47 @@ const COACH_PROMPTS = {
 - 不要用序号或列表
 - 只输出纯 JSON 对象`,
     user: '请分析以下对话，给出完整的军师分析报告：{context}'
+  },
+  overallAnalysis: {
+    system: `你是一位顶级情感关系专家，擅长对整段聊天历史进行深度分析和总结。
+
+【重要规则】
+- 始终用"ta"来指代对方，不要用"你"
+- 对话中的"我"指的是用户，"ta"指的是对方
+
+【分析维度】
+1. 整体胜率：根据整个对话氛围，给出综合成功率（0-100）
+2. 关系现状：判断两人当前处于什么阶段（陌生/熟悉/暧昧/热恋等），以及整体氛围如何
+3. 对方性格：分析对方的性格特点，用3-5个关键词标签总结
+4. 潜在风险：列出3条当前对话中存在的问题或潜在风险
+5. 下一步建议：给出3条具体的后续行动建议
+
+【输出要求 - 严格遵守】
+必须输出标准 JSON 格式，不要有任何其他文字：
+{
+  "winRate": 65,
+  "relationshipStatus": "详细描述当前关系阶段和氛围",
+  "personality": ["性格标签1", "性格标签2", "性格标签3", "性格标签4"],
+  "risks": ["风险1", "风险2", "风险3"],
+  "nextSteps": ["建议1", "建议2", "建议3"]
+}`,
+    user: '请对以下整段聊天历史进行深度分析，给出完整的分析报告：{context}'
   }
 }
 
 class AIEngine {
   private config: ModelConfig | null = null
+  private retryCount = 2
+  private retryDelay = 1000
 
   init() {
     this.setupIpcHandlers()
-    console.log('[AI] 引擎初始化完成')
+    logger.info('AI', '引擎初始化完成')
   }
 
   setConfig(config: ModelConfig) {
     this.config = config
-    console.log('[AI] 配置已更新:', config.provider, config.model)
+    logger.info('[AI] 配置已更新:', config.provider, config.model)
   }
 
   private setupIpcHandlers() {
@@ -288,8 +392,8 @@ class AIEngine {
       return this.polishText(text, style)
     })
 
-    safeHandle('ai:analyzeIntent', (_, chatHistory: any[]) => {
-      return this.analyzeIntent(chatHistory)
+    safeHandle('ai:analyzeIntent', (_, chatHistory: any[], goal?: string) => {
+      return this.analyzeIntent(chatHistory, goal)
     })
 
     safeHandle('ai:setConfig', (_, config: ModelConfig) => {
@@ -303,8 +407,12 @@ class AIEngine {
 
     safeHandle('ai:initConfig', (_, config: ModelConfig) => {
       this.setConfig(config)
-      console.log('[AI] ✅ 已从渲染进程同步配置')
+      logger.info('AI', '已从渲染进程同步配置')
       return true
+    })
+
+    safeHandle('ai:analyzeOverall', (_, chatHistory: any[], goal?: string) => {
+      return this.analyzeOverall(chatHistory, goal)
     })
   }
 
@@ -330,7 +438,7 @@ class AIEngine {
         return { success: false, error: `HTTP ${response.status}` }
       }
     } catch (e: any) {
-      console.error('Test connection failed:', e)
+      logger.error('Test connection failed:', e)
       return {
         success: false,
         error: e.response?.data?.error?.message || e.message || '未知错误'
@@ -353,19 +461,18 @@ class AIEngine {
         { role: 'user', content: template.user.replace('{text}', context) }
       ]
 
-      const result = await this.callLLM(messages)
-      // 提取第一条完整回复（去 AI 味后每条回复都是完整的）
+      const result = await this.callLLMWithRetry(messages)
       const reply = this.extractFirstReply(result)
-      
+
       return [{
         style: style,
         reply: reply || result
       }]
-    } catch (e) {
-      console.error('Generate reply failed:', e)
+    } catch (e: any) {
+      logger.error('[AI] 生成回复失败:', e)
       return [{
         style: style,
-        reply: '抱歉，AI生成失败，请稍后重试。'
+        reply: e.message || '抱歉，AI生成失败，请稍后重试。'
       }]
     }
   }
@@ -408,33 +515,33 @@ class AIEngine {
       ]
 
       const result = await this.callLLM(messages)
-      console.log('[AI] 收到原始回复:', result.substring(0, 200))
-      
+      logger.info('AI', '收到原始回复:', result.substring(0, 200))
+
       // 尝试解析 JSON
       try {
         // 尝试提取 JSON 对象
         const jsonMatch = result.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
-          console.log('[AI] 找到 JSON:', jsonMatch[0].substring(0, 100))
+          logger.info('AI', '找到 JSON:', jsonMatch[0].substring(0, 100))
           const parsed = JSON.parse(jsonMatch[0])
-          console.log('[AI] JSON 解析成功:', Object.keys(parsed))
-          
+          logger.info('AI', 'JSON 解析成功:', Object.keys(parsed))
+
           for (const [style, reply] of Object.entries(parsed)) {
             if (styles.includes(style) && reply && typeof reply === 'string') {
               results.push({ style, reply: reply.trim() })
             }
           }
-          
-          console.log('[AI] 成功提取', results.length, '条回复')
+
+          logger.info('AI', '成功提取', { count: results.length })
         }
-      } catch (e) {
-        console.error('[AI] JSON 解析失败:', e)
+      } catch (e: any) {
+        logger.error('AI', 'JSON 解析失败:', e)
         // JSON 解析失败时的处理
       }
 
       // 如果 JSON 解析失败或提取数量不够，生成兜底回复
       if (results.length < 3) {
-        console.log('[AI] JSON 解析失败或提取不足，使用兜底策略')
+        logger.info('AI', 'JSON 解析失败或提取不足，使用兜底策略')
         // 返回默认的友好回复作为兜底
         const fallbackReply = context // 使用用户输入作为兜底
         results.push({ style: 'friendly', reply: fallbackReply })
@@ -442,8 +549,8 @@ class AIEngine {
 
       return results
 
-    } catch (e) {
-      console.error('Generate all style replies failed:', e)
+    } catch (e: any) {
+      logger.error('AI', '生成所有风格回复失败:', e)
       return [{
         style: 'friendly',
         reply: context || '抱歉，AI生成失败，请稍后重试。'
@@ -463,8 +570,8 @@ class AIEngine {
       const result = await this.callLLM(messages)
       const replies = this.extractReplies(result)
       return replies.length > 0 ? replies : [result]
-    } catch (e) {
-      console.error('Polish text failed:', e)
+    } catch (e: any) {
+      logger.error('AI', '润色文本失败:', e)
       return [text]
     }
   }
@@ -481,35 +588,34 @@ class AIEngine {
         { role: 'user', content: template.user.replace('{context}', historyText + (goal ? `\\n\\n用户目标：${goal}` : '')) }
       ]
 
-      console.log('[AI] 开始军师分析...')
+      logger.info('AI', '开始军师分析', { messageCount: chatHistory.length, hasGoal: !!goal })
 
-      const result = await this.callLLM(messages)
-      console.log('[AI] 收到军师分析结果:', result)
-      console.log('[AI] 结果长度:', result.length)
+      const result = await this.callLLMWithRetry(messages)
+      logger.info('AI', '军师分析完成', { length: result.length })
 
       try {
         // 尝试匹配完整的 JSON
         let jsonMatch = result.match(/\{[\s\S]*\}/)
-        
+
         if (jsonMatch) {
           const jsonStr = jsonMatch[0]
-          console.log('[AI] JSON 字符串长度:', jsonStr.length)
-          
+          logger.info('AI', 'JSON 字符串长度:', { length: jsonStr.length })
+
           // 尝试解析
           try {
             const parsed = JSON.parse(jsonStr)
-            console.log('[AI] JSON 解析成功')
-            console.log('[AI] 解析后的字段:', Object.keys(parsed))
+            logger.info('AI', 'JSON 解析成功')
+            logger.info('AI', '解析后的字段:', Object.keys(parsed))
             return {
               ...parsed,
               success: true
             }
-          } catch (parseError) {
-            console.error('[AI] JSON 解析失败，尝试修复...', parseError)
+          } catch (parseError: any) {
+            logger.error('AI', 'JSON 解析失败，尝试修复...', parseError)
             // 尝试修复不完整的 JSON
             const fixed = this.fixIncompleteJSON(jsonStr)
             if (fixed) {
-              console.log('[AI] JSON 修复成功')
+              logger.info('AI', 'JSON 修复成功')
               return {
                 ...fixed,
                 success: true
@@ -517,10 +623,10 @@ class AIEngine {
             }
           }
         } else {
-          console.error('[AI] 未找到 JSON 对象')
+          logger.error('AI', '未找到 JSON 对象')
         }
-      } catch (e) {
-        console.error('[AI] JSON 处理失败:', e)
+      } catch (e: any) {
+        logger.error('AI', 'JSON 处理失败:', e)
       }
 
       return {
@@ -542,8 +648,8 @@ class AIEngine {
           { style: '委婉', content: '您的建议很有价值，我们会进一步优化' }
         ]
       }
-    } catch (e) {
-      console.error('Analyze intent failed:', e)
+    } catch (e: any) {
+      logger.error('AI', '分析意图失败:', e)
       return {
         success: false,
         winRate: 50,
@@ -562,6 +668,53 @@ class AIEngine {
           { style: '正式', content: '感谢您的反馈，我们会认真考虑' },
           { style: '委婉', content: '您的建议很有价值，我们会进一步优化' }
         ]
+      }
+    }
+  }
+
+  async analyzeOverall(chatHistory: any[], goal?: string): Promise<any> {
+    try {
+      const historyText = chatHistory
+        .map((m: any) => `${m.role === 'user' ? '对方' : '我'}：${m.content}`)
+        .join('\n')
+
+      const template = COACH_PROMPTS.overallAnalysis
+      const messages = [
+        { role: 'system', content: template.system },
+        { role: 'user', content: `【对话目标】${goal || '未设定'}\n\n【聊天记录】\n${historyText}` }
+      ]
+
+      logger.info('AI', '开始整体分析', { messageCount: chatHistory.length })
+
+      const result = await this.callLLMWithRetry(messages)
+
+      try {
+        const jsonMatch = result.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0])
+          return { ...parsed, success: true }
+        }
+      } catch (e: any) {
+        logger.error('AI', '整体分析 JSON 解析失败:', e)
+      }
+
+      return {
+        success: false,
+        winRate: 50,
+        relationshipStatus: '无法准确判断，建议继续对话积累数据',
+        personality: ['数据不足'],
+        risks: ['建议增加更多对话后再分析'],
+        nextSteps: ['继续与对方对话，积累更多聊天数据', '尝试在不同话题上进行互动', '观察对方的回复频率和时长变化']
+      }
+    } catch (e: any) {
+      logger.error('AI', '整体分析失败:', e)
+      return {
+        success: false,
+        winRate: 50,
+        relationshipStatus: '分析出错，请稍后重试',
+        personality: ['分析失败'],
+        risks: ['请检查网络连接'],
+        nextSteps: ['稍后重试']
       }
     }
   }
@@ -594,15 +747,44 @@ class AIEngine {
       
       // 尝试解析修复后的 JSON
       return JSON.parse(fixed)
-    } catch (e) {
-      console.error('[AI] JSON 修复失败:', e)
+    } catch (e: any) {
+      logger.error('AI', 'JSON 修复失败:', e)
       return null
     }
   }
 
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  private async callLLMWithRetry(
+    messages: { role: string; content: string }[],
+    retries: number = this.retryCount
+  ): Promise<string> {
+    try {
+      return await this.callLLM(messages)
+    } catch (e: any) {
+      if (retries > 0 && this.isRetryableError(e)) {
+        logger.info('AI', `请求失败，${this.retryDelay / 1000}s 后重试`, { retriesRemaining: retries })
+        await this.sleep(this.retryDelay)
+        return this.callLLMWithRetry(messages, retries - 1)
+      }
+      throw e
+    }
+  }
+
+  private isRetryableError(e: any): boolean {
+    const status = e.response?.status
+    return !status || status >= 500 || status === 429 || e.code === 'ECONNABORTED' || e.code === 'ETIMEDOUT'
+  }
+
   private async callLLM(messages: { role: string; content: string }[]): Promise<string> {
     if (!this.config) {
-      throw new Error('AI config not set')
+      throw new Error('请先配置 API Key')
+    }
+
+    if (!this.config.apiKey) {
+      throw new Error('API Key 不能为空')
     }
 
     try {
@@ -623,11 +805,51 @@ class AIEngine {
         }
       )
 
-      return response.data.choices[0].message.content.trim()
-    } catch (e) {
-      console.error('LLM call failed:', e)
-      throw e
+      const content = response.data.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('API 返回内容为空')
+      }
+
+      return content.trim()
+    } catch (e: any) {
+      const errorMsg = this.getErrorMessage(e)
+      logger.error('[AI] LLM 调用失败:', errorMsg)
+      throw new Error(errorMsg)
     }
+  }
+
+  private getErrorMessage(e: any): string {
+    if (e.response) {
+      const status = e.response.status
+      const data = e.response.data
+
+      switch (status) {
+        case 401:
+          return 'API Key 无效，请检查配置'
+        case 403:
+          return 'API 权限不足'
+        case 404:
+          return '模型不存在或接口地址错误'
+        case 429:
+          return '请求过于频繁，请稍后再试'
+        case 500:
+        case 502:
+        case 503:
+          return '服务器暂时不可用，请稍后重试'
+        default:
+          return data?.error?.message || `请求失败 (${status})`
+      }
+    }
+
+    if (e.code === 'ECONNABORTED') {
+      return '请求超时，请检查网络连接'
+    }
+
+    if (e.code === 'ENOTFOUND' || e.code === 'ECONNREFUSED') {
+      return '无法连接到 API 服务器，请检查地址配置'
+    }
+
+    return e.message || '未知错误'
   }
 
   private extractReplies(text: string): string[] {
@@ -704,7 +926,7 @@ class AIEngine {
       replies.push(text.trim())
     }
     
-    console.log('[AI] 提取到的回复数:', replies.length)
+    logger.info('AI', '提取到的回复数:', { count: replies.length })
     return replies.slice(0, 5)
   }
   

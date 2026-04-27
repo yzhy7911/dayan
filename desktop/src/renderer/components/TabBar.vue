@@ -86,9 +86,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  background: white;
-  border-top: 1px solid #f3f4f6;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-light);
   z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .tab-item {
@@ -97,25 +98,43 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 8px 12px;
-  color: #9ca3af;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 8px 16px;
+  color: var(--text-tertiary);
+  transition: all var(--transition-slow);
   border: none;
   background: transparent;
   cursor: pointer;
+  position: relative;
 }
 
 .tab-item.active {
-  color: #10b981;
+  color: var(--primary);
+}
+
+.tab-item.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 3px;
+  background: var(--primary-gradient);
+  border-radius: 0 0 3px 3px;
 }
 
 .tab-icon {
   width: 22px;
   height: 22px;
+  transition: all var(--transition);
+}
+
+.tab-item.active .tab-icon {
+  transform: scale(1.1);
 }
 
 .tab-label {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--font-xs);
+  font-weight: 600;
 }
 </style>
