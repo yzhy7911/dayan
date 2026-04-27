@@ -5,6 +5,7 @@ node_modules/
 # Build
 dist/
 out/
+*.asar
 
 # Logs
 logs
@@ -27,3 +28,17 @@ lerna-debug.log*
 # OS
 Thumbs.db
 .DS_Store
+
+# Local environment
+.env
+.env.local
+.env.*.local
+
+# OS generated files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Desktop.ini
+Desktop.ini
