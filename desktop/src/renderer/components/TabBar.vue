@@ -67,6 +67,14 @@ const tabs = [
     </svg>`
   },
   {
+    path: '/history',
+    label: '历史',
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2v10l5 3"/>
+      <circle cx="12" cy="12" r="9"/>
+    </svg>`
+  },
+  {
     path: '/settings',
     label: '设置',
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

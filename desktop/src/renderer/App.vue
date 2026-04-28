@@ -5,6 +5,7 @@
       <router-view />
     </div>
     <TabBar />
+    <OnboardingGuide />
   </div>
 </template>
 
@@ -12,12 +13,24 @@
 import { onMounted } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import TabBar from './components/TabBar.vue'
+import OnboardingGuide from './components/OnboardingGuide.vue'
 import { getTheme, applyTheme } from './utils/theme'
+import { HistoryStorage } from './utils/history-storage'
+import { ContactStorage } from './utils/contact-storage'
 
-onMounted(() => {
+onMounted(async () => {
   console.log('[App] ✅ App 组件已挂载')
   const theme = getTheme()
   applyTheme(theme)
+
+  // 初始化数据库
+  try {
+    await HistoryStorage.init()
+    await ContactStorage.init()
+    console.log('[App] ✅ 数据库初始化完成')
+  } catch (e) {
+    console.error('[App] ❌ 数据库初始化失败:', e)
+  }
 })
 </script>
 

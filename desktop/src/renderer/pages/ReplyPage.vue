@@ -32,6 +32,24 @@
         @paste="handlePaste"
       ></textarea>
 
+      <!-- 情绪识别提示 -->
+      <div v-if="detectedEmotion" class="emotion-detected">
+        <span class="emotion-icon">🎭</span>
+        <span class="emotion-text">
+          检测到情绪：<strong>{{ detectedEmotion }}</strong> ({{ Math.round(emotionConfidence * 100) }}%)
+        </span>
+        <button class="emotion-apply-btn" @click="applyEmotionStyle">
+          应用推荐风格
+        </button>
+      </div>
+
+      <!-- 反诈预警提示 -->
+      <div v-if="scamWarning" class="scam-warning" :class="scamWarning.level">
+        <span class="scam-icon">{{ scamWarning.level === 'high' ? '🚨' : '⚠️' }}</span>
+        <span class="scam-text">{{ scamWarning.message }}</span>
+        <span class="scam-confidence">置信度: {{ Math.round(scamWarning.confidence * 100) }}%</span>
+      </div>
+
       <div class="style-selector">
         <span class="style-label">回复风格：</span>
         <div class="style-buttons">
@@ -103,9 +121,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { hasAPIKey } from '../utils/storage'
+import { HistoryStorage } from '../utils/history-storage'
+import { EmotionDetector } from '../utils/emotion-detector'
+import { StyleLearner } from '../utils/style-learning'
+import { ScamDetector } from '../utils/ScamDetector'
 import { useToast } from '../composables/useToast'
 
 const router = useRouter()
@@ -116,6 +138,14 @@ const isGenerating = ref(false)
 const replies = ref<{ style: string; reply: string }[]>([])
 const isListening = ref(false)
 const pastedImage = ref<string | null>(null)
+
+// 情绪识别相关
+const detectedEmotion = ref<string | null>(null)
+const emotionConfidence = ref<number>(0)
+const emotionSuggestions = ref<string[]>([])
+
+// 反诈预警相关
+const scamWarning = ref<ReturnType<typeof ScamDetector.analyze>>(null)
 
 const styles = [
   { value: 'all', label: '✨ 全部风格' },
@@ -140,6 +170,14 @@ const getStyleLabel = (style: string): string => {
 
 onMounted(() => {
   console.log('[Reply] 页面加载完成')
+  StyleLearner.init()
+  // 如果有足够的学习数据，默认使用推荐风格
+  if (StyleLearner.hasEnoughData()) {
+    const recommended = StyleLearner.getRecommendedStyle()
+    if (styles.find(s => s.value === recommended)) {
+      selectedStyle.value = recommended
+    }
+  }
   // 注册剪贴板变化监听
   window.electronAPI?.clipboard?.onChanged?.((text: string) => {
     if (isListening.value && text && text.trim()) {
@@ -147,6 +185,49 @@ onMounted(() => {
     }
   })
 })
+
+// 监听输入文本变化，检测情绪和诈骗
+watch(inputText, (newText) => {
+  if (!newText || !newText.trim()) {
+    detectedEmotion.value = null
+    emotionConfidence.value = 0
+    emotionSuggestions.value = []
+    scamWarning.value = null
+    return
+  }
+
+  // 情绪识别
+  const emotionResult = EmotionDetector.detectFromText(newText)
+  if (emotionResult) {
+    detectedEmotion.value = emotionResult.emotion
+    emotionConfidence.value = emotionResult.confidence
+    emotionSuggestions.value = emotionResult.suggestions
+  } else {
+    detectedEmotion.value = null
+    emotionConfidence.value = 0
+    emotionSuggestions.value = []
+  }
+
+  // 诈骗检测
+  const scamResult = ScamDetector.analyze(newText)
+  if (scamResult) {
+    scamWarning.value = scamResult
+    if (scamResult.level === 'high') {
+      toast.error(scamResult.message)
+    }
+  } else {
+    scamWarning.value = null
+  }
+})
+
+// 应用情绪推荐的风格
+const applyEmotionStyle = () => {
+  if (!detectedEmotion.value) return
+
+  const recommendedStyle = EmotionDetector.getStyleRecommendation(detectedEmotion.value)
+  selectedStyle.value = recommendedStyle
+  toast.success(`已应用${detectedEmotion.value}风格：${getStyleLabel(recommendedStyle)}`)
+}
 
 onUnmounted(() => {
   // 页面卸载时停止监听
@@ -281,7 +362,11 @@ const generateReply = async () => {
 const copyReply = async (reply: string) => {
   try {
     await window.electronAPI?.clipboard?.setText?.(reply)
-    // 简单的成功提示（可以替换为更好的 Toast）
+    // 记录用户选择的回复风格
+    const replyItem = replies.value.find(r => r.reply === reply)
+    if (replyItem && replyItem.style !== 'all') {
+      StyleLearner.recordChoice(replyItem.style)
+    }
     toast.success('已复制到剪贴板')
   } catch (e) {
     console.error('[Reply] 复制失败:', e)
@@ -292,6 +377,11 @@ const pasteReply = async (reply: string) => {
   try {
     await window.electronAPI?.clipboard?.setText?.(reply)
     await window.electronAPI?.clipboard?.paste?.()
+    // 记录用户选择的回复风格
+    const replyItem = replies.value.find(r => r.reply === reply)
+    if (replyItem && replyItem.style !== 'all') {
+      StyleLearner.recordChoice(replyItem.style)
+    }
     console.log('[Reply] 已粘贴到微信')
   } catch (e) {
     console.error('[Reply] 粘贴失败:', e)
@@ -306,38 +396,39 @@ const goToSettings = () => {
 <style scoped>
 .reply-page {
   min-height: 100%;
-  padding: 16px;
+  padding: var(--space-4);
   background: var(--bg-secondary);
+  transition: background var(--transition);
 }
 
 .section {
   background: var(--bg-primary);
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
   box-shadow: var(--shadow-sm);
-  transition: background var(--transition);
+  transition: all var(--transition);
 }
 
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .listen-btn {
-  padding: 6px 12px;
+  padding: var(--space-1) var(--space-3);
   background: var(--warning-bg);
   color: var(--warning);
   border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition);
@@ -364,19 +455,19 @@ const goToSettings = () => {
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: var(--font-lg);
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .quick-paste-btn {
-  padding: 6px 12px;
+  padding: var(--space-1) var(--space-3);
   background: var(--primary-bg);
   color: var(--primary);
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition);
@@ -388,10 +479,11 @@ const goToSettings = () => {
 
 .image-preview-container {
   position: relative;
-  margin-bottom: 12px;
-  border-radius: 8px;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-md);
   overflow: hidden;
   border: 2px dashed var(--border-color);
+  transition: all var(--transition);
 }
 
 .pasted-image {
@@ -403,14 +495,14 @@ const goToSettings = () => {
 
 .remove-image-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: var(--space-2);
+  right: var(--space-2);
   width: 28px;
   height: 28px;
   background: rgba(0, 0, 0, 0.6);
   color: white;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -425,17 +517,17 @@ const goToSettings = () => {
 }
 
 .result-count {
-  font-size: 12px;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
 }
 
 .input-textarea {
   width: 100%;
-  padding: 12px;
+  padding: var(--space-3);
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-md);
   color: var(--text-primary);
   resize: none;
   outline: none;
@@ -447,52 +539,163 @@ const goToSettings = () => {
   box-shadow: 0 0 0 3px var(--primary-bg);
 }
 
+.emotion-detected {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--secondary-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--secondary);
+  flex-wrap: wrap;
+}
+
+.emotion-icon {
+  font-size: var(--font-xl);
+}
+
+.emotion-text {
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+}
+
+.emotion-text strong {
+  color: var(--secondary);
+}
+
+.emotion-apply-btn {
+  margin-left: auto;
+  padding: var(--space-1) var(--space-3);
+  background: var(--primary-gradient);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.emotion-apply-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.scam-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.scam-warning.medium {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+}
+
+.scam-warning.high {
+  background: var(--error-bg);
+  border: 1px solid var(--error);
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.scam-icon {
+  font-size: var(--font-xl);
+}
+
+.scam-text {
+  flex: 1;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.scam-warning.high .scam-text {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.scam-warning.medium .scam-text {
+  color: var(--warning);
+}
+
+.scam-confidence {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
 .style-selector {
-  margin-top: 16px;
+  margin-top: var(--space-4);
 }
 
 .style-label {
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 8px;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
   display: block;
+  font-weight: 500;
 }
 
 .style-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .style-btn {
-  padding: 6px 14px;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 20px;
-  font-size: 12px;
-  color: #6b7280;
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition);
+  font-weight: 500;
+}
+
+.style-btn:hover:not(.active) {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .style-btn.active {
-  background: #10b981;
-  border-color: #10b981;
+  background: var(--primary-gradient);
+  border-color: transparent;
   color: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .generate-btn {
   width: 100%;
-  margin-top: 16px;
-  padding: 12px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: var(--primary-gradient);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-md);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition);
+}
+
+.generate-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .generate-btn:disabled {
@@ -503,155 +706,167 @@ const goToSettings = () => {
 .replies-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .reply-card {
-  background: white;
-  border-radius: 12px;
-  padding: 16px;
-  border: 2px solid #e5e7eb;
-  transition: all 0.25s ease;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  border: 2px solid var(--border-color);
+  transition: all var(--transition-slow);
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
 }
 
 .reply-card:hover {
-  border-color: #10b981;
+  border-color: var(--primary);
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 .reply-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-2);
 }
 
 .reply-index {
-  display: inline-block;
-  width: 24px;
-  height: 24px;
-  line-height: 24px;
-  text-align: center;
-  background: #10b981;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: var(--primary-gradient);
   color: white;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 600;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .style-tag {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  background: #d1fae5;
-  color: #059669;
-  border-radius: 20px;
-  font-size: 11px;
+  background: var(--primary-bg);
+  color: var(--primary-dark);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
   font-weight: 500;
-  margin-left: 8px;
+  margin-left: var(--space-2);
 }
 
 .style-tag.all {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: var(--primary-gradient);
   color: white;
 }
 
 .style-tag.friendly {
-  background: #d1fae5;
-  color: #059669;
+  background: var(--primary-bg);
+  color: var(--primary-dark);
 }
 
 .style-tag.formal {
-  background: #dbeafe;
-  color: #2563eb;
+  background: var(--info-bg);
+  color: var(--info);
 }
 
 .style-tag.humorous {
-  background: #fef3c7;
-  color: #d97706;
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .style-tag.concise {
-  background: #e5e7eb;
-  color: #4b5563;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .style-tag.empathetic {
-  background: #fce7f3;
-  color: #db2777;
+  background: var(--secondary-bg);
+  color: var(--secondary-dark);
 }
 
 .reply-content {
-  font-size: 14px;
+  font-size: var(--font-md);
   line-height: 1.6;
-  color: #1f2937;
-  margin-bottom: 12px;
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+  font-weight: 500;
 }
 
 .reply-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .btn-copy,
 .btn-paste {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 14px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition);
 }
 
 .btn-copy {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .btn-copy:hover {
-  background: #e5e7eb;
+  background: var(--border-color);
+  color: var(--text-primary);
 }
 
 .btn-paste {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  background: var(--primary-gradient);
+  color: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-paste:hover {
-  background: rgba(16, 185, 129, 0.15);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .empty-tip {
   text-align: center;
-  padding: 30px 20px;
+  padding: var(--space-8) var(--space-5);
 }
 
 .tip-icon {
   font-size: 40px;
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .tip-text {
-  font-size: 14px;
-  color: #6b7280;
-  margin-bottom: 16px;
+  font-size: var(--font-md);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-4);
 }
 
 .btn-go-settings {
-  padding: 10px 20px;
-  background: #10b981;
+  padding: var(--space-2) var(--space-5);
+  background: var(--primary-gradient);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
   font-weight: 500;
   cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-go-settings:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 </style>

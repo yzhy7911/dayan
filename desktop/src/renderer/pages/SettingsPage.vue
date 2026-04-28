@@ -15,6 +15,65 @@
       </div>
     </div>
 
+    <!-- 快捷键设置区域 -->
+    <div class="section">
+      <h3 class="section-title">⌨️ 快捷键设置</h3>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <span class="setting-name">显示/隐藏窗口</span>
+          <span class="setting-desc">快速显示或隐藏搭言窗口</span>
+        </div>
+        <div class="shortcut-input-wrapper">
+          <input
+            v-model="shortcutConfig.toggleWindow"
+            class="shortcut-input"
+            placeholder="Ctrl+Shift+S"
+            @keydown="captureShortcut($event, 'toggleWindow')"
+          />
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <span class="setting-name">快速回复</span>
+          <span class="setting-desc">直接跳转到回复页面</span>
+        </div>
+        <div class="shortcut-input-wrapper">
+          <input
+            v-model="shortcutConfig.quickReply"
+            class="shortcut-input"
+            placeholder="Ctrl+Shift+R"
+            @keydown="captureShortcut($event, 'quickReply')"
+          />
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <span class="setting-name">快速润色</span>
+          <span class="setting-desc">直接跳转到润色页面</span>
+        </div>
+        <div class="shortcut-input-wrapper">
+          <input
+            v-model="shortcutConfig.quickPolish"
+            class="shortcut-input"
+            placeholder="Ctrl+Shift+P"
+            @keydown="captureShortcut($event, 'quickPolish')"
+          />
+        </div>
+      </div>
+
+      <div class="button-group" style="margin-top: 16px;">
+        <button class="btn btn-secondary" @click="resetShortcuts">
+          重置快捷键
+        </button>
+        <button class="btn btn-primary" @click="saveShortcuts">
+          保存快捷键
+        </button>
+      </div>
+    </div>
+
     <!-- 窗口设置区域 -->
     <div class="section">
       <h3 class="section-title">🪟 窗口设置</h3>
@@ -124,6 +183,28 @@
       </div>
     </div>
 
+    <!-- 自定义 Prompt -->
+    <div class="section">
+      <h3 class="section-title">⚙️ 自定义 Prompt</h3>
+
+      <div class="form-group">
+        <label class="form-label">自定义回复 Prompt</label>
+        <textarea
+          v-model="customPrompt"
+          class="form-textarea"
+          rows="4"
+          placeholder="在这里输入自定义的系统 prompt，用于 AI 生成回复..."
+        ></textarea>
+        <p class="form-hint">留空则使用默认的 prompt，自定义 prompt 将覆盖默认配置</p>
+      </div>
+
+      <div class="button-group">
+        <button class="btn-secondary" @click="resetPrompt">
+          恢复默认
+        </button>
+      </div>
+    </div>
+
     <!-- 激活码区域 -->
     <div class="section">
       <h3 class="section-title">🔑 激活码</h3>
@@ -179,6 +260,49 @@
       </div>
     </div>
 
+    <!-- 个性化学习 -->
+    <div class="section">
+      <h3 class="section-title">🧠 个性化学习</h3>
+
+      <div class="learning-info">
+        <div class="learning-progress">
+          <span class="progress-label">学习进度</span>
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: learningProgress + '%' }"></div>
+          </div>
+          <span class="progress-value">{{ Math.round(learningProgress) }}%</span>
+        </div>
+
+        <p class="learning-desc" v-if="!hasEnoughData">
+          继续使用AI回复功能，系统将学习您的风格偏好（约需10次使用）
+        </p>
+        <p class="learning-desc" v-else>
+          🎉 已掌握您的偏好！系统会根据您的使用习惯推荐回复风格
+        </p>
+      </div>
+
+      <div class="style-stats" v-if="styleStats.length > 0">
+        <h4 class="stats-title">风格偏好统计</h4>
+        <div class="stats-list">
+          <div v-for="stat in styleStats" :key="stat.style" class="stat-item">
+            <div class="stat-info">
+              <span class="stat-style">{{ getStyleLabel(stat.style) }}</span>
+              <span class="stat-count">{{ stat.count }} 次</span>
+            </div>
+            <div class="stat-bar-container">
+              <div class="stat-bar" :style="{ width: getStylePercentage(stat.style) + '%' }"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="learning-actions">
+        <button class="btn-secondary" @click="resetLearning">
+          重置学习数据
+        </button>
+      </div>
+    </div>
+
     <!-- 关于 -->
     <div class="section">
       <h3 class="section-title">ℹ️ 关于</h3>
@@ -192,9 +316,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { getAIConfig, saveAIConfig, DEFAULT_CONFIG } from '../utils/storage'
 import { getTheme, saveTheme, applyTheme } from '../utils/theme'
+import { StyleLearner } from '../utils/style-learning'
+import { useToast } from '../composables/useToast'
+
+const toast = useToast()
 
 const settings = ref({
   provider: 'openai',
@@ -211,6 +339,13 @@ const isDockingEnabled = ref(true)
 const isAlwaysOnTop = ref(false)
 const isDarkMode = ref(false)
 
+// 快捷键配置
+const shortcutConfig = ref({
+  toggleWindow: 'CommandOrControl+Shift+S',
+  quickReply: 'CommandOrControl+Shift+R',
+  quickPolish: 'CommandOrControl+Shift+P'
+})
+
 const showLicenseInput = ref(false)
 const licenseKey = ref('')
 const isActivating = ref(false)
@@ -222,13 +357,139 @@ const currentLicense = ref({
   expireDate: null as string | null
 })
 
+// 个性化学习相关
+const styleStats = computed(() => StyleLearner.getStyleStats())
+const learningProgress = computed(() => StyleLearner.getLearningProgress())
+const hasEnoughData = computed(() => StyleLearner.hasEnoughData())
+
+// 自定义 Prompt 相关
+const CUSTOM_PROMPT_KEY = 'dayan-custom-prompt'
+const customPrompt = ref('')
+
+const loadCustomPrompt = () => {
+  const saved = localStorage.getItem(CUSTOM_PROMPT_KEY)
+  if (saved) {
+    customPrompt.value = saved
+  }
+}
+
+const saveCustomPrompt = () => {
+  localStorage.setItem(CUSTOM_PROMPT_KEY, customPrompt.value)
+  toast.success('自定义 Prompt 已保存')
+}
+
+const resetPrompt = () => {
+  customPrompt.value = ''
+  localStorage.removeItem(CUSTOM_PROMPT_KEY)
+  toast.success('已恢复默认 Prompt')
+}
+
 onMounted(async () => {
   await loadSettings()
   await loadLicenseInfo()
+  await loadShortcuts()
+  loadCustomPrompt()
+  StyleLearner.init()
   const theme = getTheme()
   isDarkMode.value = theme === 'dark'
   applyTheme(theme)
 })
+
+// 个性化学习相关函数
+const getStyleLabel = (style: string): string => {
+  const styleMap: Record<string, string> = {
+    friendly: '💬 友好',
+    formal: '💼 正式',
+    humorous: '😄 幽默',
+    concise: '⚡ 简洁',
+    empathetic: '💝 共情',
+    warm: '🔥 温暖',
+  }
+  return styleMap[style] || style
+}
+
+const getStylePercentage = (style: string): number => {
+  return StyleLearner.getStylePercentage(style)
+}
+
+const resetLearning = () => {
+  if (!confirm('确定要重置所有学习数据吗？这将清除您的风格偏好记录。')) {
+    return
+  }
+  StyleLearner.reset()
+  toast.success('学习数据已重置')
+}
+
+// 快捷键相关函数
+const loadShortcuts = async () => {
+  try {
+    const config = await window.electronAPI?.shortcuts?.getConfig()
+    if (config) {
+      shortcutConfig.value = { ...shortcutConfig.value, ...config }
+    }
+    console.log('[Settings] ✅ 快捷键配置已加载')
+  } catch (e) {
+    console.error('[Settings] 加载快捷键配置失败:', e)
+  }
+}
+
+const captureShortcut = (event: KeyboardEvent, key: string) => {
+  event.preventDefault()
+
+  const keys: string[] = []
+  if (event.ctrlKey || event.metaKey) keys.push('CommandOrControl')
+  if (event.shiftKey) keys.push('Shift')
+  if (event.altKey) keys.push('Alt')
+
+  // 获取实际按键
+  const keyMap: Record<string, string> = {
+    'ArrowUp': 'Up',
+    'ArrowDown': 'Down',
+    'ArrowLeft': 'Left',
+    'ArrowRight': 'Right',
+    ' ': 'Space',
+    'Escape': 'Esc'
+  }
+
+  let keyValue = event.key
+  if (keyMap[keyValue]) {
+    keyValue = keyMap[keyValue]
+  } else if (keyValue.length === 1) {
+    keyValue = keyValue.toUpperCase()
+  }
+
+  // 避免只添加修饰键
+  if (!['Control', 'Shift', 'Alt', 'Meta', 'CommandOrControl'].includes(keyValue)) {
+    keys.push(keyValue)
+  }
+
+  shortcutConfig.value[key as keyof typeof shortcutConfig.value] = keys.join('+')
+}
+
+const saveShortcuts = async () => {
+  try {
+    await window.electronAPI?.shortcuts?.setConfig(shortcutConfig.value)
+    toast.success('快捷键配置已保存！')
+    console.log('[Settings] ✅ 快捷键配置已保存')
+  } catch (e) {
+    console.error('[Settings] 保存快捷键配置失败:', e)
+    toast.error('保存失败')
+  }
+}
+
+const resetShortcuts = async () => {
+  try {
+    const config = await window.electronAPI?.shortcuts?.reset()
+    if (config) {
+      shortcutConfig.value = { ...config }
+    }
+    toast.success('快捷键已重置为默认！')
+    console.log('[Settings] ✅ 快捷键已重置')
+  } catch (e) {
+    console.error('[Settings] 重置快捷键失败:', e)
+    toast.error('重置失败')
+  }
+}
 
 const loadSettings = async () => {
   console.log('[Settings] 📂 从本地存储加载配置...')
@@ -249,6 +510,7 @@ const saveSettings = async () => {
 
   try {
     saveAIConfig(settings.value)
+    saveCustomPrompt()
 
     testResult.value = {
       success: true,
@@ -450,7 +712,8 @@ const resetToDefault = () => {
 }
 
 .form-input,
-.form-select {
+.form-select,
+.form-textarea {
   width: 100%;
   padding: var(--space-2) var(--space-3);
   background: var(--bg-primary);
@@ -460,6 +723,13 @@ const resetToDefault = () => {
   color: var(--text-primary);
   outline: none;
   transition: all var(--transition);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+  line-height: 1.6;
 }
 
 .form-input:focus,
@@ -580,6 +850,159 @@ const resetToDefault = () => {
 
 .result-text {
   font-size: var(--font-base);
+  color: var(--text-primary);
+}
+
+.shortcut-input-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.shortcut-input {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  text-align: center;
+  min-width: 160px;
+  outline: none;
+  transition: all var(--transition);
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.shortcut-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
+  background: var(--bg-primary);
+}
+
+.learning-info {
+  margin-bottom: var(--space-4);
+}
+
+.learning-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.progress-label {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary-gradient);
+  border-radius: var(--radius-full);
+  transition: width var(--transition);
+}
+
+.progress-value {
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  font-weight: 600;
+  min-width: 40px;
+  text-align: right;
+}
+
+.learning-desc {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.style-stats {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-light);
+}
+
+.stats-title {
+  font-size: var(--font-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stat-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-style {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.stat-count {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.stat-bar-container {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.stat-bar {
+  height: 100%;
+  background: var(--primary-gradient);
+  border-radius: var(--radius-full);
+  transition: width var(--transition);
+}
+
+.learning-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.btn-secondary {
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-secondary:hover {
+  background: var(--border-color);
   color: var(--text-primary);
 }
 

@@ -8,6 +8,7 @@ import { logger } from './logger'
 import { errorMonitor } from './error-monitor'
 import { windowDockManager } from './window-dock'
 import { ocrManager } from './ocr'
+import { shortcutManager } from './shortcuts'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -65,6 +66,7 @@ function createWindow() {
   clipboardManager.init(mainWindow)
   aiEngine.init()
   ocrManager.init(mainWindow)
+  shortcutManager.init(mainWindow)
   // macOS 窗口吸附到微信
   if (process.platform === 'darwin') {
     windowDockManager.init(mainWindow)
@@ -100,15 +102,6 @@ app.whenReady().then(async () => {
       // 数据存储使用 Dexie.js（IndexedDB），无需主进程处理
 
       createWindow()
-
-      // 注册全局快捷键：Ctrl+Shift+D 触发屏幕识别
-      globalShortcut.register('CommandOrControl+Shift+D', () => {
-        logger.info('OCR', '🔥 触发全局快捷键：屏幕识别')
-        if (mainWindow) {
-          mainWindow.show()
-          mainWindow.webContents.send('ocr:trigger')
-        }
-      })
 
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

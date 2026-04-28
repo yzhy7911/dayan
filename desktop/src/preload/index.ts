@@ -42,6 +42,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     testConnection: () => ipcRenderer.invoke('ai:testConnection')
   },
 
+  shortcuts: {
+    getConfig: () => ipcRenderer.invoke('shortcuts:getConfig'),
+    setConfig: (config: any) => ipcRenderer.invoke('shortcuts:setConfig', config),
+    register: (accelerator: string, action: string) => ipcRenderer.invoke('shortcuts:register', accelerator, action),
+    unregister: (accelerator: string) => ipcRenderer.invoke('shortcuts:unregister', accelerator),
+    reset: () => ipcRenderer.invoke('shortcuts:reset')
+  },
+
   // 数据库通用 IPC 代理
   invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
 
@@ -85,6 +93,13 @@ declare global {
         testConnection: () => Promise<{ success: boolean; model?: string; error?: string }>
         setConfig: (config: any) => Promise<boolean>
         initConfig: (config: any) => Promise<boolean>
+      },
+      shortcuts: {
+        getConfig: () => Promise<any>
+        setConfig: (config: any) => Promise<boolean>
+        register: (accelerator: string, action: string) => Promise<boolean>
+        unregister: (accelerator: string) => Promise<boolean>
+        reset: () => Promise<any>
       }
       on: (channel: string, callback: (...args: any[]) => void) => void
     }
