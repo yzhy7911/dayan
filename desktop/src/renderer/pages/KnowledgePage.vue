@@ -16,6 +16,9 @@
       <button class="import-btn" @click="triggerFileImport">
         📥 导入话术
       </button>
+      <button class="export-btn" @click="exportKnowledge">
+        📤 导出话术
+      </button>
       <input
         ref="fileInputRef"
         type="file"
@@ -446,6 +449,46 @@ const confirmImport = async () => {
     importPreview.value = []
   }
 }
+
+const exportKnowledge = () => {
+  if (knowledge.value.length === 0) {
+    toast.warning('没有可导出的话术')
+    return
+  }
+
+  try {
+    // 准备导出数据（移除 id、createdAt 等内部字段）
+    const exportData = knowledge.value.map(item => ({
+      category: item.category,
+      keyword: item.keyword,
+      content: item.content
+    }))
+
+    const jsonStr = JSON.stringify({
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      count: exportData.length,
+      items: exportData
+    }, null, 2)
+
+    // 创建下载链接
+    const blob = new Blob([jsonStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `话术库_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    toast.success(`成功导出 ${exportData.length} 条话术`)
+    console.log('[Knowledge] ✅ 导出话术成功，共', exportData.length, '条')
+  } catch (error) {
+    console.error('[Knowledge] ❌ 导出话术失败:', error)
+    toast.error('导出失败，请重试')
+  }
+}
 </script>
 
 <style scoped>
@@ -453,6 +496,7 @@ const confirmImport = async () => {
   height: 100%;
   overflow-y: auto;
   padding: var(--space-4);
+  background: var(--bg-secondary);
 }
 
 /* 搜索区域 */
@@ -516,6 +560,26 @@ const confirmImport = async () => {
 
 .import-btn:hover {
   background: var(--secondary);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.export-btn {
+  padding: var(--space-2) var(--space-3);
+  background: var(--primary-bg);
+  color: var(--primary-dark);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+
+.export-btn:hover {
+  background: var(--primary);
   color: white;
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);

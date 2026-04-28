@@ -1,9 +1,24 @@
-import { createHash, publicEncrypt, privateDecrypt } from 'crypto'
+import { createHash } from 'crypto'
 import { machineIdSync } from 'node-machine-id'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import CryptoJS from 'crypto-js'
+
+/**
+ * 📝 TODO: 未来计划 - 采用在线授权系统
+ *
+ * 当前实现：离线激活码验证
+ * 未来计划：
+ * 1. 服务端验证 - 激活码需要连接服务器验证
+ * 2. 实时有效期检查 - 定期与服务器同步授权状态
+ * 3. 在线解绑/换绑 - 支持用户自助管理设备
+ * 4. 激活码绑定账号 - 用户注册登录后管理授权
+ * 5. 订阅模式支持 - 月付/年付订阅管理
+ * 6. Web管理后台 - 激活码生成、用户管理、数据统计
+ *
+ * @see 搭言-技术架构方案.md - 授权系统章节
+ */
 
 interface LicenseInfo {
   isValid: boolean

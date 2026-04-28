@@ -20,6 +20,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  ocr: {
+    hasImage: () => ipcRenderer.invoke('ocr:hasImage'),
+    getImage: () => ipcRenderer.invoke('ocr:getImage'),
+    recognize: (imageData?: string) => ipcRenderer.invoke('ocr:recognize', imageData)
+  },
+
   license: {
     verify: (key: string) => ipcRenderer.invoke('license:verify', key),
     getMachineId: () => ipcRenderer.invoke('license:getMachineId'),
@@ -35,6 +41,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     initConfig: (config: any) => ipcRenderer.invoke('ai:initConfig', config),
     testConnection: () => ipcRenderer.invoke('ai:testConnection')
   },
+
+  // 数据库通用 IPC 代理
+  invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
 
   on: (channel: string, callback: (...args: any[]) => void) => {
     ipcRenderer.on(channel, (_, ...args) => callback(...args))
@@ -58,6 +67,11 @@ declare global {
         startListen: () => Promise<boolean>
         stopListen: () => Promise<boolean>
         onChanged: (callback: (text: string) => void) => void
+      }
+      ocr: {
+        hasImage: () => Promise<boolean>
+        getImage: () => Promise<string | null>
+        recognize: (imageData?: string) => Promise<{ success: boolean; text: string; error?: string }>
       }
       license: {
         verify: (key: string) => Promise<any>

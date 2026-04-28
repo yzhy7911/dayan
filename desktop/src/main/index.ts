@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, globalShortcut } from 'electron'
 import { join } from 'path'
 import { windowManager } from './window'
 import { clipboardManager } from './clipboard'
@@ -7,6 +7,7 @@ import { aiEngine } from './ai'
 import { logger } from './logger'
 import { errorMonitor } from './error-monitor'
 import { windowDockManager } from './window-dock'
+import { ocrManager } from './ocr'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -63,6 +64,7 @@ function createWindow() {
   windowManager.init(mainWindow)
   clipboardManager.init(mainWindow)
   aiEngine.init()
+  ocrManager.init(mainWindow)
   // macOS 窗口吸附到微信
   if (process.platform === 'darwin') {
     windowDockManager.init(mainWindow)
@@ -73,18 +75,57 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(() => {
-  logger.info('Main', '✅ Electron 已就绪')
-  createWindow()
+app.whenReady().then(async () => {
+    // 🔴 全局 try-catch：任何错误都不会导致整个回调崩溃
+    try {
+      logger.info('Main', '✅ Electron 已就绪')
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+      // ==================================================
+      // 第一优先级：先注册 OCR handler
+      // ==================================================
+      console.log('[OCR] 🚀 正在注册 OCR handler...')
+      // OCR 功能暂禁用，后续优化后再开启
+      // ipcMain.handle('ocr:captureAndRecognize', async () => {
+      //   console.log('[OCR] 🔥 收到识别请求')
+      //   const rawText = ['张三 14:32', '你好，最近怎么样？', '李四 14:35', '挺好的，下周有空一起吃饭吗？'].join('\n')
+      //   const messages = rawText.split('\n').filter(l => l.trim()).map(l => ({ speaker: '未知', content: l }))
+      //   return { success: true, rawText, lines: [], messages, imagePath: '' }
+      // })
+      ipcMain.handle('ocr:parseChat', async (_event, text: string) => {
+        const messages = text.split('\n').filter(l => l.trim()).map(l => ({ speaker: '未知', content: l }))
+        return { success: true, messages }
+      })
+      console.log('[OCR] ✅✅✅ OCR handler 全部注册成功！')
+
+      // 数据存储使用 Dexie.js（IndexedDB），无需主进程处理
+
       createWindow()
+
+      // 注册全局快捷键：Ctrl+Shift+D 触发屏幕识别
+      globalShortcut.register('CommandOrControl+Shift+D', () => {
+        logger.info('OCR', '🔥 触发全局快捷键：屏幕识别')
+        if (mainWindow) {
+          mainWindow.show()
+          mainWindow.webContents.send('ocr:trigger')
+        }
+      })
+
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          createWindow()
+        }
+      })
+
+    } catch (err) {
+      console.error('[Main] ❌ whenReady 回调崩溃:', err)
+      logger.error('Main', 'whenReady 回调崩溃', String(err))
     }
   })
-})
 
 app.on('window-all-closed', () => {
+  // 注销全局快捷键
+  globalShortcut.unregisterAll()
+
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -99,18 +140,11 @@ ipcMain.handle('window:close', () => {
   mainWindow?.close()
 })
 
-ipcMain.handle('window:toggleDock', () => {
-  return windowManager.toggleDock()
-})
-
 ipcMain.handle('window:setAlwaysOnTop', (_, alwaysOnTop: boolean) => {
   mainWindow?.setAlwaysOnTop(alwaysOnTop)
 })
 
-// === Clipboard IPC ===
-ipcMain.handle('clipboard:getText', () => {
-  return clipboardManager.getText()
-})
+// === Clipboard IPC 已在 clipboard.ts 中注册 ===
 
 // === License IPC ===
 ipcMain.handle('license:verify', (_, key: string) => {

@@ -19,14 +19,35 @@
     <div v-if="!selectedContact" class="contact-list-container">
       <div class="list-header">
         <h3 class="list-title">我的联系人</h3>
-        <button class="add-btn" @click="showAddModal = true">
-          <span>+</span>
-        </button>
+        <div class="header-actions">
+          <button v-if="contacts.length > 0" class="export-btn" @click="exportContacts">📤 导出</button>
+          <button class="import-btn" @click="triggerImport">📥 导入</button>
+          <button class="add-btn" @click="showAddModal = true">
+            <span>+</span>
+          </button>
+        </div>
+      </div>
+      <input
+        ref="fileInputRef"
+        type="file"
+        accept=".json"
+        style="display: none"
+        @change="handleImport"
+      >
+
+      <!-- 搜索框 -->
+      <div class="search-container">
+        <input
+          v-model="searchKeyword"
+          class="search-input"
+          placeholder="搜索联系人..."
+          type="text"
+        >
       </div>
 
       <div class="contact-list">
         <div
-          v-for="contact in contacts"
+          v-for="contact in filteredContacts"
           :key="contact.id"
           class="contact-item"
           @click="selectContact(contact)"
@@ -71,9 +92,13 @@
       <div class="detail-header">
         <button class="back-btn" @click="selectedContact = null">‹</button>
         <h3 class="detail-title">{{ selectedContact.name }}</h3>
-        <button class="analyze-btn" @click="analyzeContact" :disabled="isAnalyzing">
-          {{ isAnalyzing ? '分析中...' : 'AI 分析' }}
-        </button>
+        <div class="detail-actions">
+          <button class="action-btn edit-btn" @click="editContact">✏️</button>
+          <button class="action-btn delete-btn" @click="confirmDeleteContact">🗑️</button>
+          <button class="analyze-btn" @click="analyzeContact" :disabled="isAnalyzing">
+            {{ isAnalyzing ? '分析中...' : 'AI 分析' }}
+          </button>
+        </div>
       </div>
 
       <div class="detail-content">
@@ -165,7 +190,10 @@
             >
               <div class="chat-bubble">
                 <div class="chat-content">{{ record.content }}</div>
-                <div class="chat-time">{{ formatTime(record.timestamp) }}</div>
+                <div class="chat-meta">
+                  <span class="chat-time">{{ formatTime(record.timestamp) }}</span>
+                  <button class="delete-record-btn" @click="deleteChatRecord(record.id)">×</button>
+                </div>
               </div>
             </div>
 
@@ -177,24 +205,64 @@
       </div>
     </div>
 
-    <!-- 添加联系人弹窗 -->
+    <!-- 添加/编辑联系人弹窗 -->
     <div v-if="showAddModal" class="modal-overlay" @click.self="showAddModal = false">
       <div class="modal-content">
-        <h3 class="modal-title">添加联系人</h3>
+        <h3 class="modal-title">{{ isEditMode ? '编辑联系人' : '添加联系人' }}</h3>
 
         <div class="form-group">
           <label class="form-label">姓名 / 昵称</label>
-          <input v-model="newContact.name" class="form-input" placeholder="请输入姓名" type="text">
+          <input v-model="editingContact.name" class="form-input" placeholder="请输入姓名" type="text">
         </div>
 
         <div class="form-group">
           <label class="form-label">备注</label>
-          <input v-model="newContact.remark" class="form-input" placeholder="备注信息" type="text">
+          <input v-model="editingContact.remark" class="form-input" placeholder="备注信息" type="text">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">标签（用逗号分隔）</label>
+          <input v-model="editingContact.tagsStr" class="form-input" placeholder="朋友, 客户, 家人" type="text">
         </div>
 
         <div class="modal-actions">
           <button class="cancel-btn" @click="showAddModal = false">取消</button>
-          <button class="confirm-btn" @click="addContact">确认添加</button>
+          <button class="confirm-btn" @click="saveContact">确认保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteModal" class="modal-overlay" @click.self="showDeleteModal = false">
+      <div class="modal-content">
+        <h3 class="modal-title">确认删除</h3>
+        <p class="delete-text">确定要删除「{{ selectedContact?.name }}」吗？所有聊天记录和分析结果也将被删除。</p>
+        <div class="modal-actions">
+          <button class="cancel-btn" @click="showDeleteModal = false">取消</button>
+          <button class="confirm-btn delete-confirm" @click="deleteContact">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 导入预览弹窗 -->
+    <div v-if="showImportModal" class="modal-overlay" @click.self="showImportModal = false">
+      <div class="modal-content import-modal">
+        <h3 class="modal-title">导入联系人</h3>
+
+        <div v-if="importPreview.length > 0">
+          <p class="import-count">检测到 {{ importPreview.length }} 个联系人</p>
+          <div class="import-list">
+            <div v-for="(item, index) in importPreview.slice(0, 5)" :key="index" class="import-item">
+              <span class="import-name">{{ item.name }}</span>
+              <span v-if="item.remark" class="import-remark">{{ item.remark }}</span>
+            </div>
+            <p v-if="importPreview.length > 5" class="import-more">还有 {{ importPreview.length - 5 }} 个联系人...</p>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="cancel-btn" @click="showImportModal = false">取消</button>
+          <button v-if="importPreview.length > 0" class="confirm-btn" @click="confirmImport">确认导入</button>
         </div>
       </div>
     </div>
@@ -202,20 +270,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ContactStorage, Contact, ContactAnalysis } from '../utils/contact-storage'
+import { useToast } from '../composables/useToast'
+
+const toast = useToast()
 
 const contacts = ref<Contact[]>([])
 const selectedContact = ref<Contact | null>(null)
 const analysis = ref<ContactAnalysis | null>(null)
 const chatRecords = ref<any[]>([])
 const showAddModal = ref(false)
+const showDeleteModal = ref(false)
+const showImportModal = ref(false)
+const isEditMode = ref(false)
 const isAnalyzing = ref(false)
 const newChatContent = ref('')
 const newChatSender = ref<'me' | 'contact'>('contact')
+const searchKeyword = ref('')
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const importPreview = ref<any[]>([])
+
+const filteredContacts = computed(() => {
+  if (!searchKeyword.value.trim()) {
+    return contacts.value
+  }
+  const keyword = searchKeyword.value.toLowerCase()
+  return contacts.value.filter(contact =>
+    contact.name.toLowerCase().includes(keyword) ||
+    (contact.remark && contact.remark.toLowerCase().includes(keyword)) ||
+    contact.tags.some(tag => tag.toLowerCase().includes(keyword))
+  )
+})
+
 const newContact = ref({
   name: '',
-  remark: ''
+  remark: '',
+  tagsStr: ''
+})
+const editingContact = ref({
+  id: 0,
+  name: '',
+  remark: '',
+  tagsStr: ''
 })
 
 onMounted(async () => {
@@ -233,17 +330,170 @@ async function selectContact(contact: Contact) {
   chatRecords.value = await ContactStorage.getChatRecords(contact.id)
 }
 
-async function addContact() {
-  if (!newContact.value.name.trim()) return
+function editContact() {
+  if (!selectedContact.value) return
+  isEditMode.value = true
+  editingContact.value = {
+    id: selectedContact.value.id || 0,
+    name: selectedContact.value.name,
+    remark: selectedContact.value.remark || '',
+    tagsStr: selectedContact.value.tags.join(', ')
+  }
+  showAddModal.value = true
+}
 
-  await ContactStorage.createContact(
-    newContact.value.name.trim(),
-    newContact.value.remark.trim()
-  )
+async function saveContact() {
+  if (isEditMode.value && editingContact.value.id) {
+    // 更新现有联系人
+    await ContactStorage.updateContact(editingContact.value.id, {
+      name: editingContact.value.name.trim(),
+      remark: editingContact.value.remark.trim(),
+      tags: editingContact.value.tagsStr.split(',').map(t => t.trim()).filter(t => t)
+    })
+    toast.success('联系人已更新')
+  } else {
+    // 添加新联系人
+    await ContactStorage.createContact(
+      newContact.value.name.trim(),
+      newContact.value.remark.trim()
+    )
+    toast.success('联系人已添加')
+  }
 
-  newContact.value = { name: '', remark: '' }
+  newContact.value = { name: '', remark: '', tagsStr: '' }
+  editingContact.value = { id: 0, name: '', remark: '', tagsStr: '' }
   showAddModal.value = false
+  isEditMode.value = false
   await loadContacts()
+  if (selectedContact.value) {
+    await selectContact(selectedContact.value)
+  }
+}
+
+function confirmDeleteContact() {
+  showDeleteModal.value = true
+}
+
+async function deleteContact() {
+  if (!selectedContact.value?.id) return
+  await ContactStorage.deleteContact(selectedContact.value.id)
+  toast.success('联系人已删除')
+  showDeleteModal.value = false
+  selectedContact.value = null
+  await loadContacts()
+}
+
+function exportContacts() {
+  try {
+    const exportData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      count: contacts.value.length,
+      contacts: contacts.value.map(c => ({
+        name: c.name,
+        remark: c.remark,
+        tags: c.tags,
+        chatCount: c.chatCount,
+        lastChatTime: c.lastChatTime
+      }))
+    }
+
+    const jsonStr = JSON.stringify(exportData, null, 2)
+    const blob = new Blob([jsonStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `联系人_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    toast.success(`成功导出 ${contacts.value.length} 个联系人`)
+  } catch (error) {
+    console.error('导出失败:', error)
+    toast.error('导出失败，请重试')
+  }
+}
+
+function triggerImport() {
+  importPreview.value = []
+  if (fileInputRef.value) {
+    fileInputRef.value.click()
+  }
+}
+
+async function handleImport(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    let data: any = JSON.parse(text)
+
+    let contactsToImport: any[] = []
+    if (Array.isArray(data)) {
+      contactsToImport = data
+    } else if (Array.isArray(data.contacts)) {
+      contactsToImport = data.contacts
+    } else if (Array.isArray(data.items)) {
+      contactsToImport = data.items
+    } else if (Array.isArray(data.data)) {
+      contactsToImport = data.data
+    } else {
+      toast.error('文件格式不正确，请检查')
+      return
+    }
+
+    if (contactsToImport.length === 0) {
+      toast.error('文件中没有联系人数据')
+      return
+    }
+
+    // 验证数据格式
+    importPreview.value = contactsToImport.filter(c =>
+      c.name && typeof c.name === 'string' && c.name.trim()
+    ).map(c => ({
+      name: c.name.trim(),
+      remark: c.remark || '',
+      tags: Array.isArray(c.tags) ? c.tags : []
+    }))
+
+    if (importPreview.value.length === 0) {
+      toast.error('没有有效的联系人数据')
+      return
+    }
+
+    showImportModal.value = true
+    toast.success(`检测到 ${importPreview.value.length} 个联系人`)
+  } catch (error) {
+    console.error('解析文件失败:', error)
+    toast.error('文件解析失败，请检查格式')
+  } finally {
+    if (target) {
+      target.value = ''
+    }
+  }
+}
+
+async function confirmImport() {
+  if (importPreview.value.length === 0) return
+
+  try {
+    let count = 0
+    for (const item of importPreview.value) {
+      await ContactStorage.createContact(item.name, item.remark)
+      count++
+    }
+    await loadContacts()
+    importPreview.value = []
+    showImportModal.value = false
+    toast.success(`成功导入 ${count} 个联系人`)
+  } catch (error) {
+    console.error('导入失败:', error)
+    toast.error('导入失败，请重试')
+  }
 }
 
 async function addChatRecord() {
@@ -258,6 +508,16 @@ async function addChatRecord() {
   newChatContent.value = ''
   chatRecords.value = await ContactStorage.getChatRecords(selectedContact.value.id)
   await loadContacts()
+  toast.success('聊天记录已添加')
+}
+
+async function deleteChatRecord(recordId: number) {
+  if (!selectedContact.value?.id) return
+  if (!confirm('确定要删除这条聊天记录吗？')) return
+
+  await ContactStorage.deleteChatRecord(selectedContact.value.id, recordId)
+  chatRecords.value = await ContactStorage.getChatRecords(selectedContact.value.id)
+  toast.success('聊天记录已删除')
 }
 
 async function analyzeContact() {
@@ -266,37 +526,51 @@ async function analyzeContact() {
   isAnalyzing.value = true
 
   try {
-    // 使用 AI 引擎分析
+    // 获取聊天记录
     const records = await ContactStorage.getChatRecords(selectedContact.value.id)
 
     if (records.length < 3) {
-      alert('请先添加至少 3 条聊天记录后再分析')
+      toast.error('请先添加至少 3 条聊天记录后再分析')
       return
     }
 
-    // 构造分析数据 - 这里先模拟分析结果
-    // 实际项目中调用主进程 AI 分析
-    const mockAnalysis: Omit<ContactAnalysis, 'id' | 'analyzedAt'> = {
-      contactId: selectedContact.value.id,
-      personality: '性格开朗乐观，喜欢分享生活，比较健谈',
-      communicationStyle: '偏向感性沟通，喜欢用表情符号',
-      commonTopics: ['美食', '旅行', '电影'],
-      emotionalTendency: '偏积极向上，偶尔会吐槽工作压力',
-      bestResponseTime: '中午 12:00-14:00 和晚上 20:00-23:00 回复最快',
-      tabooTopics: ['不喜欢讨论工作细节', '避免提前任'],
-      suggestions: [
-        '多聊生活话题，增加亲切感',
-        '回复时适当使用表情符号',
-        '避免在工作时间发太长的消息',
-        '对方说话时多倾听，少打断'
-      ]
+    // 将聊天记录格式化为军师分析需要的格式
+    const chatHistory = records.map((r: any) => ({
+      role: r.sender === 'me' ? 'assistant' : 'user',
+      content: r.content
+    }))
+
+    // 调用主进程 AI 进行整体分析
+    const result = await window.electronAPI?.ai?.analyzeOverall(chatHistory, '建立良好关系')
+
+    if (result?.success === false && result?.error) {
+      toast.error('分析失败：' + result.error)
+      return
     }
 
-    await ContactStorage.saveAnalysis(mockAnalysis)
-    analysis.value = await ContactStorage.getLatestAnalysis(selectedContact.value.id)
+    if (result) {
+      // 保存分析结果 - 从返回的数据中提取并转换
+      const analysisData: Omit<ContactAnalysis, 'id' | 'analyzedAt'> = {
+        contactId: selectedContact.value.id,
+        personality: result.personality?.length ? result.personality.join('，') : '暂无分析结果',
+        communicationStyle: result.relationshipStatus || '暂无分析结果',
+        commonTopics: Array.isArray(result.personality) ? result.personality.slice(0, 3) : [],
+        emotionalTendency: '暂无分析结果',
+        bestResponseTime: '暂无分析结果',
+        tabooTopics: Array.isArray(result.risks) ? result.risks : [],
+        suggestions: Array.isArray(result.nextSteps) ? result.nextSteps : []
+      }
 
-  } catch (error) {
+      await ContactStorage.saveAnalysis(analysisData)
+      analysis.value = await ContactStorage.getLatestAnalysis(selectedContact.value.id)
+      toast.success('分析完成！')
+    } else {
+      toast.error('分析失败，请稍后重试')
+    }
+
+  } catch (error: any) {
     console.error('分析失败:', error)
+    toast.error('分析失败：' + (error.message || '未知错误'))
   } finally {
     isAnalyzing.value = false
   }
@@ -321,7 +595,7 @@ function formatTime(timestamp: number): string {
   height: 100%;
   overflow-y: auto;
   padding: 16px;
-  background: #f9fafb;
+  background: var(--bg-secondary);
 }
 
 .svip-banner {
@@ -378,9 +652,32 @@ function formatTime(timestamp: number): string {
 }
 
 .contact-list-container {
-  background: white;
+  background: var(--bg-primary);
   border-radius: 12px;
   overflow: hidden;
+  transition: background var(--transition);
+}
+
+.search-container {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  transition: border-color var(--transition);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--secondary);
 }
 
 .list-header {
@@ -388,14 +685,49 @@ function formatTime(timestamp: number): string {
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .list-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.export-btn,
+.import-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.export-btn {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.export-btn:hover {
+  background: #bfdbfe;
+}
+
+.import-btn {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.import-btn:hover {
+  background: #fde68a;
 }
 
 .add-btn {
@@ -538,6 +870,43 @@ function formatTime(timestamp: number): string {
   font-weight: 600;
   color: #1f2937;
   margin: 0;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.edit-btn {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.edit-btn:hover {
+  background: #fde68a;
+}
+
+.delete-btn {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.delete-btn:hover {
+  background: #fecaca;
 }
 
 .analyze-btn {
@@ -743,11 +1112,59 @@ function formatTime(timestamp: number): string {
   word-break: break-word;
 }
 
+.chat-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .chat-time {
   font-size: 11px;
   opacity: 0.7;
-  margin-top: 4px;
-  text-align: right;
+}
+
+.delete-record-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.delete-record-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: white;
+}
+
+.chat-record.contact .delete-record-btn {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.chat-record.contact .delete-record-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1f2937;
+}
+
+.delete-text {
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+  margin: 16px 0;
+  line-height: 1.6;
+}
+
+.delete-confirm {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
 }
 
 .no-records {
@@ -833,5 +1250,60 @@ function formatTime(timestamp: number): string {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
+}
+
+/* 导入弹窗样式 */
+.import-modal {
+  max-width: 380px;
+}
+
+.import-count {
+  font-size: 14px;
+  color: #1f2937;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.import-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fafafa;
+}
+
+.import-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: white;
+  margin-bottom: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.import-item:last-child {
+  margin-bottom: 0;
+}
+
+.import-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.import-remark {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.import-more {
+  text-align: center;
+  font-size: 13px;
+  color: #9ca3af;
+  padding: 8px;
+  margin: 0;
 }
 </style>

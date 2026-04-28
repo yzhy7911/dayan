@@ -4,16 +4,32 @@
     <div class="section">
       <div class="section-header">
         <h3 class="section-title">📝 输入内容</h3>
-        <button class="quick-paste-btn" @click="pasteFromClipboard">
-          📋 粘贴
-        </button>
+        <div class="header-actions">
+          <button
+            class="listen-btn"
+            :class="{ active: isListening }"
+            @click="toggleListening"
+          >
+            {{ isListening ? '🔴 监听中' : '📡 监听剪贴板' }}
+          </button>
+          <button class="quick-paste-btn" @click="pasteFromClipboard">
+            📋 粘贴
+          </button>
+        </div>
+      </div>
+
+      <!-- 图片预览区 -->
+      <div v-if="pastedImage" class="image-preview-container">
+        <img :src="pastedImage" class="pasted-image" alt="粘贴的图片" />
+        <button class="remove-image-btn" @click="removeImage">×</button>
       </div>
 
       <textarea
         v-model="inputText"
         class="input-textarea"
-        placeholder="粘贴微信聊天内容，AI 自动生成回复..."
+        placeholder="粘贴微信聊天内容或截图，AI 自动生成回复..."
         rows="4"
+        @paste="handlePaste"
       ></textarea>
 
       <div class="style-selector">
@@ -87,15 +103,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { hasAPIKey } from '../utils/storage'
+import { useToast } from '../composables/useToast'
 
 const router = useRouter()
+const toast = useToast()
 const inputText = ref('')
 const selectedStyle = ref('all')
 const isGenerating = ref(false)
 const replies = ref<{ style: string; reply: string }[]>([])
+const isListening = ref(false)
+const pastedImage = ref<string | null>(null)
 
 const styles = [
   { value: 'all', label: '✨ 全部风格' },
@@ -120,10 +140,59 @@ const getStyleLabel = (style: string): string => {
 
 onMounted(() => {
   console.log('[Reply] 页面加载完成')
+  // 注册剪贴板变化监听
+  window.electronAPI?.clipboard?.onChanged?.((text: string) => {
+    if (isListening.value && text && text.trim()) {
+      handleClipboardChange(text)
+    }
+  })
 })
+
+onUnmounted(() => {
+  // 页面卸载时停止监听
+  if (isListening.value) {
+    window.electronAPI?.clipboard?.stopListen?.()
+  }
+})
+
+const toggleListening = async () => {
+  try {
+    if (isListening.value) {
+      await window.electronAPI?.clipboard?.stopListen?.()
+      isListening.value = false
+      toast.info('已停止剪贴板监听')
+    } else {
+      await window.electronAPI?.clipboard?.startListen?.()
+      isListening.value = true
+      toast.success('已开始监听剪贴板，复制微信内容后自动填充')
+    }
+  } catch (e) {
+    console.error('[Reply] 切换监听状态失败:', e)
+    toast.error('操作失败，请重试')
+  }
+}
+
+const handleClipboardChange = (text: string) => {
+  console.log('[Reply] 检测到剪贴板变化:', text.substring(0, 50))
+  inputText.value = text
+  // 自动触发生成（可选，这里只填充不自动生成）
+  toast.info('已自动填充剪贴板内容')
+}
 
 const pasteFromClipboard = async () => {
   try {
+    // 先检查是否有图片
+    const hasImage = await window.electronAPI?.ocr?.hasImage?.()
+    if (hasImage) {
+      const imageData = await window.electronAPI?.ocr?.getImage?.()
+      if (imageData) {
+        pastedImage.value = imageData
+        toast.success('已粘贴图片，AI 将分析图片内容')
+        return
+      }
+    }
+
+    // 没有图片则粘贴文本
     const text = await window.electronAPI?.clipboard?.getText?.()
     if (text) {
       inputText.value = text
@@ -134,16 +203,49 @@ const pasteFromClipboard = async () => {
   }
 }
 
+const handlePaste = async (event: ClipboardEvent) => {
+  // 检查剪贴板中的图片
+  const items = event.clipboardData?.items
+  if (items) {
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) {
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            pastedImage.value = e.target?.result as string
+            toast.success('已粘贴图片，AI 将分析图片内容')
+          }
+          reader.readAsDataURL(file)
+          event.preventDefault()
+          return
+        }
+      }
+    }
+  }
+}
+
+const removeImage = () => {
+  pastedImage.value = null
+}
+
 const generateReply = async () => {
-  if (!inputText.value.trim()) return
+  if (!inputText.value.trim() && !pastedImage.value) return
 
   isGenerating.value = true
   replies.value = []
 
   try {
+    // 构建包含图片的提示
+    let prompt = inputText.value
+    if (pastedImage.value) {
+      prompt = '[图片] ' + prompt
+      toast.info('正在分析图片内容...')
+    }
+
     console.log(`[Reply] 正在生成回复... 风格: ${selectedStyle.value}`)
     const result = await window.electronAPI?.ai?.generateReply?.(
-      inputText.value,
+      prompt,
       selectedStyle.value
     )
 
@@ -180,7 +282,7 @@ const copyReply = async (reply: string) => {
   try {
     await window.electronAPI?.clipboard?.setText?.(reply)
     // 简单的成功提示（可以替换为更好的 Toast）
-    alert('已复制到剪贴板')
+    toast.success('已复制到剪贴板')
   } catch (e) {
     console.error('[Reply] 复制失败:', e)
   }
@@ -205,15 +307,16 @@ const goToSettings = () => {
 .reply-page {
   min-height: 100%;
   padding: 16px;
-  background: #f9fafb;
+  background: var(--bg-secondary);
 }
 
 .section {
-  background: white;
+  background: var(--bg-primary);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
+  transition: background var(--transition);
 }
 
 .section-header {
@@ -221,6 +324,43 @@ const goToSettings = () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.listen-btn {
+  padding: 6px 12px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.listen-btn:hover {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.listen-btn.active {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border-color: transparent;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 .section-title {
@@ -232,41 +372,79 @@ const goToSettings = () => {
 
 .quick-paste-btn {
   padding: 6px 12px;
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  background: var(--primary-bg);
+  color: var(--primary);
   border: none;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition);
 }
 
 .quick-paste-btn:hover {
   background: rgba(16, 185, 129, 0.15);
 }
 
+.image-preview-container {
+  position: relative;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px dashed var(--border-color);
+}
+
+.pasted-image {
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  display: block;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.remove-image-btn:hover {
+  background: var(--error);
+}
+
 .result-count {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .input-textarea {
   width: 100%;
   padding: 12px;
-  background: #f9fafb;
-  border: 1px solid #d1d5db;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 14px;
-  color: #1f2937;
+  color: var(--text-primary);
   resize: none;
   outline: none;
-  transition: all 0.2s;
+  transition: all var(--transition);
 }
 
 .input-textarea:focus {
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
 }
 
 .style-selector {

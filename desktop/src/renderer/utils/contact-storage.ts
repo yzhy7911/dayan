@@ -75,21 +75,6 @@ export class ContactStorage {
     return await contactDB.contacts.get(id)
   }
 
-  static async updateContact(id: number, updates: Partial<Contact>): Promise<number> {
-    return await contactDB.contacts.update(id, {
-      ...updates,
-      updatedAt: Date.now()
-    })
-  }
-
-  static async deleteContact(id: number): Promise<void> {
-    await contactDB.transaction('rw', [contactDB.contacts, contactDB.analysis, contactDB.chatRecords], async () => {
-      await contactDB.contacts.delete(id)
-      await contactDB.analysis.where('contactId').equals(id).delete()
-      await contactDB.chatRecords.where('contactId').equals(id).delete()
-    })
-  }
-
   static async addChatRecord(contactId: number, content: string, sender: 'me' | 'contact'): Promise<number> {
     const record: ChatRecord = {
       contactId,
@@ -111,13 +96,10 @@ export class ContactStorage {
   }
 
   static async getChatRecords(contactId: number, limit: number = 100): Promise<ChatRecord[]> {
-    return await contactDB.chatRecords
-      .where('contactId')
-      .equals(contactId)
-      .orderBy('timestamp')
-      .reverse()
-      .limit(limit)
-      .toArray()
+    const allRecords = await contactDB.chatRecords.where('contactId').equals(contactId).toArray()
+    // 手动排序：时间倒序
+    allRecords.sort((a, b) => b.timestamp - a.timestamp)
+    return allRecords.slice(0, limit)
   }
 
   static async saveAnalysis(analysis: Omit<ContactAnalysis, 'id' | 'analyzedAt'>): Promise<number> {
@@ -129,12 +111,35 @@ export class ContactStorage {
   }
 
   static async getLatestAnalysis(contactId: number): Promise<ContactAnalysis | undefined> {
-    return await contactDB.analysis
-      .where('contactId')
-      .equals(contactId)
-      .orderBy('analyzedAt')
-      .reverse()
-      .first()
+    const allAnalysis = await contactDB.analysis.where('contactId').equals(contactId).toArray()
+    if (allAnalysis.length === 0) return undefined
+    // 手动排序：时间倒序，取最新的
+    allAnalysis.sort((a, b) => b.analyzedAt - a.analyzedAt)
+    return allAnalysis[0]
+  }
+
+  static async updateContact(contactId: number, updates: Partial<Contact>): Promise<void> {
+    await contactDB.contacts.update(contactId, {
+      ...updates,
+      updatedAt: Date.now()
+    })
+  }
+
+  static async deleteContact(contactId: number): Promise<void> {
+    await contactDB.transaction('rw', [contactDB.contacts, contactDB.analysis, contactDB.chatRecords], async () => {
+      await contactDB.contacts.delete(contactId)
+      await contactDB.analysis.where('contactId').equals(contactId).delete()
+      await contactDB.chatRecords.where('contactId').equals(contactId).delete()
+    })
+  }
+
+  static async deleteChatRecord(contactId: number, recordId: number): Promise<void> {
+    await contactDB.chatRecords.delete(recordId)
+    // 更新联系人聊天计数
+    await contactDB.contacts.update(contactId, {
+      chatCount: await contactDB.chatRecords.where('contactId').equals(contactId).count(),
+      updatedAt: Date.now()
+    })
   }
 
   static async initDefaultData(): Promise<void> {

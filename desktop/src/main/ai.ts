@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, IpcMainInvokeEvent } from 'electron'
 import axios from 'axios'
 import { logger } from './logger'
 
@@ -384,19 +384,19 @@ class AIEngine {
       ipcMain.handle(channel, handler)
     }
 
-    safeHandle('ai:generateReply', (_, context: string, style: string) => {
+    safeHandle('ai:generateReply', (_event: IpcMainInvokeEvent, context: string, style: string) => {
       return this.generateReply(context, style)
     })
 
-    safeHandle('ai:polishText', (_, text: string, style: string) => {
+    safeHandle('ai:polishText', (_event: IpcMainInvokeEvent, text: string, style: string) => {
       return this.polishText(text, style)
     })
 
-    safeHandle('ai:analyzeIntent', (_, chatHistory: any[], goal?: string) => {
+    safeHandle('ai:analyzeIntent', (_event: IpcMainInvokeEvent, chatHistory: any[], goal?: string) => {
       return this.analyzeIntent(chatHistory, goal)
     })
 
-    safeHandle('ai:setConfig', (_, config: ModelConfig) => {
+    safeHandle('ai:setConfig', (_event: IpcMainInvokeEvent, config: ModelConfig) => {
       this.setConfig(config)
       return true
     })
@@ -405,13 +405,13 @@ class AIEngine {
       return this.testConnection()
     })
 
-    safeHandle('ai:initConfig', (_, config: ModelConfig) => {
+    safeHandle('ai:initConfig', (_event: IpcMainInvokeEvent, config: ModelConfig) => {
       this.setConfig(config)
       logger.info('AI', '已从渲染进程同步配置')
       return true
     })
 
-    safeHandle('ai:analyzeOverall', (_, chatHistory: any[], goal?: string) => {
+    safeHandle('ai:analyzeOverall', (_event: IpcMainInvokeEvent, chatHistory: any[], goal?: string) => {
       return this.analyzeOverall(chatHistory, goal)
     })
   }
@@ -542,9 +542,8 @@ class AIEngine {
       // 如果 JSON 解析失败或提取数量不够，生成兜底回复
       if (results.length < 3) {
         logger.info('AI', 'JSON 解析失败或提取不足，使用兜底策略')
-        // 返回默认的友好回复作为兜底
-        const fallbackReply = context // 使用用户输入作为兜底
-        results.push({ style: 'friendly', reply: fallbackReply })
+        // 返回错误提示
+        results.push({ style: 'friendly', reply: '❌ 生成失败，请检查网络或API配置' })
       }
 
       return results
@@ -553,7 +552,7 @@ class AIEngine {
       logger.error('AI', '生成所有风格回复失败:', e)
       return [{
         style: 'friendly',
-        reply: context || '抱歉，AI生成失败，请稍后重试。'
+        reply: '❌ ' + (e.message || '抱歉，AI生成失败，请稍后重试。')
       }]
     }
   }
@@ -572,7 +571,7 @@ class AIEngine {
       return replies.length > 0 ? replies : [result]
     } catch (e: any) {
       logger.error('AI', '润色文本失败:', e)
-      return [text]
+      return ['❌ ' + (e.message || '润色失败，请稍后重试')]
     }
   }
 
@@ -667,7 +666,8 @@ class AIEngine {
           { style: '友好', content: '让我想想怎么回复比较合适' },
           { style: '正式', content: '感谢您的反馈，我们会认真考虑' },
           { style: '委婉', content: '您的建议很有价值，我们会进一步优化' }
-        ]
+        ],
+        error: e?.message || '分析失败，请检查网络连接'
       }
     }
   }
@@ -714,7 +714,8 @@ class AIEngine {
         relationshipStatus: '分析出错，请稍后重试',
         personality: ['分析失败'],
         risks: ['请检查网络连接'],
-        nextSteps: ['稍后重试']
+        nextSteps: ['稍后重试'],
+        error: e?.message || '分析失败，请检查网络连接'
       }
     }
   }

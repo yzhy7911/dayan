@@ -1,5 +1,45 @@
 <template>
   <div class="settings-page">
+    <!-- 外观设置区域 -->
+    <div class="section">
+      <h3 class="section-title">🎨 外观设置</h3>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <span class="setting-name">暗色模式</span>
+          <span class="setting-desc">切换深色/浅色主题</span>
+        </div>
+        <div class="toggle-switch" :class="{ active: isDarkMode }" @click="toggleDarkMode">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 窗口设置区域 -->
+    <div class="section">
+      <h3 class="section-title">🪟 窗口设置</h3>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <span class="setting-name">吸附到微信窗口</span>
+          <span class="setting-desc">自动跟随微信窗口移动和调整大小</span>
+        </div>
+        <div class="toggle-switch" :class="{ active: isDockingEnabled }" @click="toggleDocking">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <span class="setting-name">窗口置顶</span>
+          <span class="setting-desc">保持搭言窗口在最上层</span>
+        </div>
+        <div class="toggle-switch" :class="{ active: isAlwaysOnTop }" @click="toggleAlwaysOnTop">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- AI 配置区域 -->
     <div class="section">
       <h3 class="section-title">🤖 AI 模型配置</h3>
@@ -84,11 +124,66 @@
       </div>
     </div>
 
+    <!-- 激活码区域 -->
+    <div class="section">
+      <h3 class="section-title">🔑 激活码</h3>
+
+      <div v-if="currentLicense.isValid" class="license-info">
+        <div class="license-status active">
+          <span class="status-icon">✅</span>
+          <span class="status-text">已激活</span>
+        </div>
+        <div class="license-detail">
+          <span class="detail-label">版本类型</span>
+          <span class="detail-value" :class="currentLicense.type">{{ getLicenseTypeName(currentLicense.type) }}</span>
+        </div>
+        <div v-if="currentLicense.expireDate" class="license-detail">
+          <span class="detail-label">到期时间</span>
+          <span class="detail-value">{{ formatDate(currentLicense.expireDate) }}</span>
+        </div>
+        <button class="btn btn-secondary" @click="showLicenseInput = true">更换激活码</button>
+      </div>
+
+      <div v-else class="license-input-area">
+        <div class="license-status">
+          <span class="status-icon">⚪</span>
+          <span class="status-text">未激活</span>
+        </div>
+
+        <div v-if="showLicenseInput" class="form-group">
+          <label class="form-label">输入激活码</label>
+          <input
+            v-model="licenseKey"
+            type="text"
+            class="form-input"
+            placeholder="请输入激活码..."
+            @keyup.enter="activateLicense"
+          />
+          <p class="form-hint">机器码: {{ machineId }}</p>
+        </div>
+
+        <div class="button-group">
+          <button v-if="!showLicenseInput" class="btn btn-primary" @click="showLicenseInput = true">
+            输入激活码
+          </button>
+          <button v-else class="btn btn-primary" :class="{ loading: isActivating }" :disabled="isActivating || !licenseKey" @click="activateLicense">
+            {{ isActivating ? '激活中...' : '立即激活' }}
+          </button>
+          <button v-if="showLicenseInput" class="btn btn-secondary" @click="cancelActivation">取消</button>
+        </div>
+
+        <div v-if="activationResult" class="test-result" :class="activationResult.success ? 'success' : 'error'">
+          <span class="result-icon">{{ activationResult.success ? '✅' : '❌' }}</span>
+          <span class="result-text">{{ activationResult.message }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- 关于 -->
     <div class="section">
       <h3 class="section-title">ℹ️ 关于</h3>
       <div class="about-info">
-        <p class="app-name">嗒言</p>
+        <p class="app-name">搭言</p>
         <p class="app-version">版本 1.0.0</p>
         <p class="app-desc">懂你的智能聊天助手</p>
       </div>
@@ -99,6 +194,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { getAIConfig, saveAIConfig, DEFAULT_CONFIG } from '../utils/storage'
+import { getTheme, saveTheme, applyTheme } from '../utils/theme'
 
 const settings = ref({
   provider: 'openai',
@@ -111,9 +207,27 @@ const isSaving = ref(false)
 const isTesting = ref(false)
 const showApiKey = ref(false)
 const testResult = ref<{ success: boolean; message: string } | null>(null)
+const isDockingEnabled = ref(true)
+const isAlwaysOnTop = ref(false)
+const isDarkMode = ref(false)
+
+const showLicenseInput = ref(false)
+const licenseKey = ref('')
+const isActivating = ref(false)
+const machineId = ref('')
+const activationResult = ref<{ success: boolean; message: string } | null>(null)
+const currentLicense = ref({
+  isValid: false,
+  type: 'free' as const,
+  expireDate: null as string | null
+})
 
 onMounted(async () => {
   await loadSettings()
+  await loadLicenseInfo()
+  const theme = getTheme()
+  isDarkMode.value = theme === 'dark'
+  applyTheme(theme)
 })
 
 const loadSettings = async () => {
@@ -121,6 +235,12 @@ const loadSettings = async () => {
   const saved = getAIConfig()
   settings.value = { ...settings.value, ...saved }
   console.log('[Settings] ✅ 配置加载完成')
+}
+
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value
+  saveTheme(isDarkMode.value ? 'dark' : 'light')
+  applyTheme(isDarkMode.value ? 'dark' : 'light')
 }
 
 const saveSettings = async () => {
@@ -193,6 +313,94 @@ const testConnection = async () => {
   }
 }
 
+const toggleDocking = async () => {
+  try {
+    const result = await window.electronAPI?.window?.toggleDock?.()
+    isDockingEnabled.value = result
+    console.log('[Settings] 窗口吸附:', result ? '已开启' : '已关闭')
+  } catch (e) {
+    console.error('[Settings] 切换吸附状态失败:', e)
+  }
+}
+
+const toggleAlwaysOnTop = async () => {
+  try {
+    isAlwaysOnTop.value = !isAlwaysOnTop.value
+    await window.electronAPI?.window?.setAlwaysOnTop?.(isAlwaysOnTop.value)
+    console.log('[Settings] 窗口置顶:', isAlwaysOnTop.value ? '已开启' : '已关闭')
+  } catch (e) {
+    console.error('[Settings] 切换置顶状态失败:', e)
+    isAlwaysOnTop.value = !isAlwaysOnTop.value
+  }
+}
+
+const loadLicenseInfo = async () => {
+  try {
+    machineId.value = await window.electronAPI?.license?.getMachineId?.() || ''
+    const isActivated = await window.electronAPI?.license?.isActivated?.()
+    currentLicense.value.isValid = isActivated
+  } catch (e) {
+    console.error('[Settings] 加载授权信息失败:', e)
+  }
+}
+
+const activateLicense = async () => {
+  if (!licenseKey.value.trim()) return
+
+  isActivating.value = true
+  activationResult.value = null
+
+  try {
+    const result = await window.electronAPI?.license?.verify?.(licenseKey.value.trim())
+    if (result?.isValid) {
+      currentLicense.value = result
+      activationResult.value = {
+        success: true,
+        message: '激活成功！'
+      }
+      showLicenseInput.value = false
+      licenseKey.value = ''
+    } else {
+      activationResult.value = {
+        success: false,
+        message: '激活失败，请检查激活码是否正确'
+      }
+    }
+  } catch (e) {
+    activationResult.value = {
+      success: false,
+      message: '激活失败: ' + (e as Error).message
+    }
+    console.error('[Settings] 激活失败:', e)
+  } finally {
+    isActivating.value = false
+  }
+}
+
+const cancelActivation = () => {
+  showLicenseInput.value = false
+  licenseKey.value = ''
+  activationResult.value = null
+}
+
+const getLicenseTypeName = (type: string) => {
+  const names: Record<string, string> = {
+    free: '免费版',
+    pro: 'Pro 专业版',
+    svip: 'SVIP 超级会员'
+  }
+  return names[type] || type
+}
+
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+}
+
 const resetToDefault = () => {
   settings.value = {
     provider: DEFAULT_CONFIG.ai_provider,
@@ -208,54 +416,56 @@ const resetToDefault = () => {
 <style scoped>
 .settings-page {
   min-height: 100%;
-  padding: 16px;
-  background: #f9fafb;
+  padding: var(--space-4);
+  background: var(--bg-secondary);
+  transition: background var(--transition);
 }
 
 .section {
-  background: white;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition);
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: var(--font-lg);
   font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 16px;
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
 }
 
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .form-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--font-base);
   font-weight: 500;
-  color: #374151;
-  margin-bottom: 6px;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1);
 }
 
 .form-input,
 .form-select {
   width: 100%;
-  padding: 10px 12px;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #1f2937;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-md);
+  color: var(--text-primary);
   outline: none;
-  transition: all 0.2s;
+  transition: all var(--transition);
 }
 
 .form-input:focus,
 .form-select:focus {
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
 }
 
 .input-with-icon {
@@ -270,14 +480,14 @@ const resetToDefault = () => {
 
 .icon-btn {
   position: absolute;
-  right: 10px;
+  right: var(--space-2);
   background: none;
   border: none;
   font-size: 16px;
   cursor: pointer;
   padding: 4px;
   opacity: 0.6;
-  transition: opacity 0.2s;
+  transition: opacity var(--transition);
 }
 
 .icon-btn:hover {
@@ -285,26 +495,26 @@ const resetToDefault = () => {
 }
 
 .form-hint {
-  font-size: 11px;
-  color: #6b7280;
-  margin-top: 4px;
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
 }
 
 .button-group {
   display: flex;
-  gap: 8px;
-  margin-top: 20px;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
 }
 
 .btn {
   flex: 1;
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition);
 }
 
 .btn:disabled {
@@ -317,16 +527,17 @@ const resetToDefault = () => {
 }
 
 .btn-secondary {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .btn-secondary:hover {
-  background: #e5e7eb;
+  background: var(--border-color);
+  color: var(--text-primary);
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: var(--info);
   color: white;
 }
 
@@ -335,62 +546,186 @@ const resetToDefault = () => {
 }
 
 .btn-success {
-  background: #10b981;
+  background: var(--primary-gradient);
   color: white;
 }
 
 .btn-success:hover {
-  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .test-result {
-  margin-top: 16px;
-  padding: 12px;
-  border-radius: 8px;
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .test-result.success {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: var(--success-bg);
+  border: 1px solid var(--primary-bg);
 }
 
 .test-result.error {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: var(--error-bg);
+  border: 1px solid #fecaca;
 }
 
 .result-icon {
-  font-size: 16px;
+  font-size: var(--font-lg);
 }
 
 .result-text {
-  font-size: 13px;
-  color: #374151;
+  font-size: var(--font-base);
+  color: var(--text-primary);
 }
 
 .about-info {
   text-align: center;
-  padding: 20px 0;
+  padding: var(--space-5) 0;
 }
 
 .app-name {
-  font-size: 18px;
+  font-size: var(--font-xl);
   font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 4px;
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
 }
 
 .app-version {
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 8px;
+  font-size: var(--font-base);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
 }
 
 .app-desc {
-  font-size: 13px;
-  color: #9ca3af;
+  font-size: var(--font-base);
+  color: var(--text-tertiary);
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-light);
+  transition: all var(--transition);
+}
+
+.setting-item:last-child {
+  border-bottom: none;
+}
+
+.setting-info {
+  flex: 1;
+}
+
+.setting-name {
+  display: block;
+  font-size: var(--font-md);
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.setting-desc {
+  display: block;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  background: var(--border-color);
+  border-radius: var(--radius-full);
+  position: relative;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.toggle-switch.active {
+  background: var(--primary);
+}
+
+.toggle-knob {
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: all var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+
+.toggle-switch.active .toggle-knob {
+  left: 22px;
+}
+
+.license-info,
+.license-input-area {
+  padding: var(--space-2) 0;
+}
+
+.license-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  transition: all var(--transition);
+}
+
+.license-status.active {
+  background: var(--success-bg);
+}
+
+.status-icon {
+  font-size: var(--font-xl);
+}
+
+.status-text {
+  font-size: var(--font-md);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.license-detail {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-light);
+  transition: all var(--transition);
+}
+
+.license-detail:last-of-type {
+  border-bottom: none;
+  margin-bottom: var(--space-4);
+}
+
+.detail-label {
+  font-size: var(--font-base);
+  color: var(--text-secondary);
+}
+
+.detail-value {
+  font-size: var(--font-base);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.detail-value.pro {
+  color: var(--warning);
+}
+
+.detail-value.svip {
+  color: var(--secondary);
 }
 </style>

@@ -55,6 +55,9 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useToast } from '../composables/useToast'
+
+const toast = useToast()
 
 const inputText = ref('')
 const selectedStyle = ref('friendly')
@@ -95,11 +98,17 @@ const polishText = async () => {
       inputText.value,
       selectedStyle.value
     )
+    // 检查是否包含错误标记
+    if (result && result.length > 0 && result[0].startsWith('❌')) {
+      toast.error('润色失败：' + result[0].replace('❌ ', ''))
+      return
+    }
     results.value = result || []
     console.log('[Polish] 润色完成，生成', results.value.length, '条结果')
-  } catch (e) {
+    toast.success('润色完成！')
+  } catch (e: any) {
     console.error('Polish text failed:', e)
-    results.value = [inputText.value]
+    toast.error('润色失败：' + (e.message || '未知错误'))
   } finally {
     isPolishing.value = false
   }
@@ -122,6 +131,7 @@ const pasteResult = async (text: string) => {
   height: 100%;
   overflow-y: auto;
   padding: var(--space-4);
+  background: var(--bg-secondary);
 }
 
 /* 输入区域 */

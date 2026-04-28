@@ -1,0 +1,2114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搭言 - 智能聊天助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #9ca3af 0%, #6b7280 100%); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #6b7280 0%, #4b5563 100%); }
+
+        /* 核心主题色 */
+        :root {
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --primary-light: #d1fae5;
+            --svip-start: #8b5cf6;
+            --svip-end: #6366f1;
+            --pro-start: #f59e0b;
+            --pro-end: #d97706;
+        }
+
+        /* 功能按钮激活态 */
+        .func-btn {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .func-btn.active {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+            transform: translateY(-0.5px);
+        }
+        .func-btn:hover:not(.active) {
+            background: #f3f4f6;
+            transform: translateY(-0.5px);
+        }
+
+        /* 草稿卡片悬浮效果 */
+        .draft-card {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1.5px solid transparent;
+        }
+        .draft-card:hover {
+            border-color: #10b981;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px -5px rgba(16, 185, 129, 0.15);
+        }
+
+        /* 快捷话术悬浮效果 */
+        .shortcut-item {
+            transition: all 0.2s ease;
+        }
+        .shortcut-item:hover {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-color: #86efac;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+        }
+
+        /* 渐变徽章 */
+        .pro-badge {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+        }
+        .svip-badge {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+        }
+
+        /* 主按钮渐变 */
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover {
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+            transform: translateY(-1px);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        /* SVIP按钮 */
+        .btn-svip {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+            transition: all 0.2s ease;
+        }
+        .btn-svip:hover {
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+            transform: translateY(-1px);
+        }
+
+        /* 输入框聚焦效果 */
+        input:focus, textarea:focus, select:focus {
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+        }
+
+        /* 开关按钮美化 */
+        .switch-toggle {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .switch-dot {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 卡片高级阴影 */
+        .card-shadow {
+            box-shadow: 0 2px 12px -2px rgba(0, 0, 0, 0.08),
+                        0 1px 3px -1px rgba(0, 0, 0, 0.05);
+        }
+        .card-shadow-hover {
+            transition: all 0.25s ease;
+        }
+        .card-shadow-hover:hover {
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1),
+                        0 4px 10px -3px rgba(0, 0, 0, 0.05);
+            transform: translateY(-2px);
+        }
+
+        /* 毛玻璃效果 */
+        .glass {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        /* 进度条动画 */
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .progress-animate {
+            background: linear-gradient(90deg, #10b981 25%, #34d399 50%, #10b981 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        body {
+            width: 380px;
+            min-height: 650px;
+            background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 标题栏 - 毛玻璃质感 -->
+    <div class="h-11 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 flex items-center justify-between px-4 select-none shrink-0 shadow-lg">
+        <div class="flex items-center space-x-2">
+            <div class="w-7 h-7 rounded-xl bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center shadow-lg shadow-green-500/30">
+                <span class="text-sm">💬</span>
+            </div>
+            <span class="text-white text-sm font-semibold tracking-tight">搭言</span>
+            <span class="svip-badge text-white text-[10px] px-1.5 py-0.5 rounded-full font-semibold ml-1">SVIP</span>
+        </div>
+        <div class="flex items-center space-x-1">
+            <div class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-700 text-gray-400 cursor-pointer" onclick="toggleSettings()" title="设置">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </div>
+            <div class="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-700 text-gray-400 cursor-pointer" title="吸附到微信">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                </svg>
+            </div>
+            <div class="w-6 h-6 flex items-center justify-center rounded hover:bg-red-500 text-gray-400 cursor-pointer" title="收起">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- 状态栏 + 高级功能指示器 -->
+    <div class="bg-green-50 border-b border-green-100 px-3 py-1.5 flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-2">
+            <div class="flex items-center text-xs text-green-700">
+                <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>
+                <span>已吸附微信</span>
+            </div>
+            <div class="flex items-center text-xs text-purple-700">
+                <span class="w-1.5 h-1.5 bg-purple-500 rounded-full mr-1.5"></span>
+                <span>自动粘贴已开</span>
+            </div>
+        </div>
+        <div class="flex items-center space-x-1">
+            <span class="text-xs text-gray-400">Alt+V</span>
+        </div>
+    </div>
+
+    <!-- 试用倒计时栏 -->
+    <div id="trial-bar" class="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-3 py-1.5 shrink-0">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-1.5">
+                <span class="text-xs">⏱️</span>
+                <span class="text-xs font-medium text-amber-700">免费试用</span>
+                <span class="text-xs text-amber-600">还剩 <span id="trial-days">5</span> 天</span>
+            </div>
+            <button onclick="openActivation()" class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full hover:bg-amber-600 transition-colors font-medium">
+                激活 PRO
+            </button>
+        </div>
+    </div>
+
+    <!-- 已激活PRO状态栏（默认隐藏） -->
+    <div id="pro-activated-bar" class="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-200 px-3 py-1.5 shrink-0 hidden">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-1.5">
+                <span class="text-xs">👑</span>
+                <span class="text-xs font-medium text-purple-700">PRO 专业版</span>
+                <span class="text-xs text-purple-600">已激活</span>
+            </div>
+            <span class="text-xs text-purple-500">有效期至 2027-04-27</span>
+        </div>
+    </div>
+
+    <!-- 新消息到达提示 -->
+    <div id="new-message-alert" class="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-3 py-2 shrink-0 cursor-pointer hover:bg-amber-100 transition-colors">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <span class="text-base">💬</span>
+                <div>
+                    <p class="text-xs font-medium text-amber-800">张三发来新消息</p>
+                    <p class="text-xs text-amber-600 truncate max-w-[200px]">你们产品怎么收费的？有优惠吗？</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="text-xs text-amber-700 font-medium">AI 已自动生成回复</p>
+                <p class="text-xs text-amber-500">点击查看 →</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 功能切换 -->
+    <div class="bg-white border-b border-gray-200 px-3 py-2 shrink-0">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-0.5 bg-gray-100 rounded-lg p-0.5">
+                <button onclick="switchFunc('reply')" class="func-btn active px-1.5 py-1.5 rounded-md text-xs font-medium transition-all" data-func="reply">
+                    💬 回复
+                </button>
+                <button onclick="switchFunc('coach')" class="func-btn px-1.5 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-200 transition-all" data-func="coach">
+                    🧠 军师
+                </button>
+                <button onclick="switchFunc('polish')" class="func-btn px-1.5 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-200 transition-all" data-func="polish">
+                    ✨ 润色
+                </button>
+                <button onclick="switchFunc('contacts')" class="func-btn px-1.5 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-200 transition-all" data-func="contacts">
+                    👥 联系人
+                </button>
+                <button onclick="switchFunc('shortcuts')" class="func-btn px-1.5 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-200 transition-all" data-func="shortcuts">
+                    📝 话术
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <div class="flex-1 overflow-hidden">
+        <!-- 智能回复模式 -->
+        <div id="func-reply" class="h-full flex flex-col">
+            <!-- 输入区 -->
+            <div class="p-3 bg-white border-b border-gray-100 shrink-0">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs font-medium text-gray-700">📝 对方消息</span>
+                    <div class="flex items-center space-x-1.5">
+                        <button onclick="triggerFileUpload()" class="text-xs text-purple-600 hover:text-purple-700 flex items-center space-x-0.5">
+                            <span>📎</span>
+                            <span>上传图片/文件</span>
+                            <span class="pro-badge text-white text-xs px-1 py-0.5 rounded ml-0.5">PRO</span>
+                        </button>
+                        <button onclick="clearReplyInput()" class="text-xs text-gray-400 hover:text-gray-600">清空</button>
+                    </div>
+                </div>
+                <textarea id="reply-input" rows="2" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-green-500/20 text-xs transition-all">你们产品怎么收费的？有优惠活动吗？</textarea>
+                <input type="file" id="multimodal-upload" class="hidden" accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx" onchange="handleFileUpload(event)">
+
+                <!-- 已上传文件预览区 -->
+                <div id="upload-preview" class="mt-2 hidden">
+                    <div class="flex items-center justify-between p-2 bg-purple-50 rounded-lg border border-purple-200">
+                        <div class="flex items-center space-x-2 flex-1 min-w-0">
+                            <span id="upload-icon" class="text-lg">🖼️</span>
+                            <div class="min-w-0 flex-1">
+                                <p id="upload-filename" class="text-xs font-medium text-gray-700 truncate">screenshot.png</p>
+                                <p id="upload-status" class="text-xs text-purple-600">正在分析内容...</p>
+                            </div>
+                        </div>
+                        <button onclick="clearUpload()" class="p-1 hover:bg-purple-100 rounded ml-2">
+                            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图片/文件分析结果 -->
+            <div id="analysis-result-section" class="px-3 py-2 bg-blue-50 border-b border-blue-100 shrink-0 hidden">
+                <div class="flex items-center justify-between mb-1">
+                    <div class="flex items-center space-x-1 text-blue-700">
+                        <span class="text-xs">🔍</span>
+                        <span class="text-xs font-medium">AI 内容解析</span>
+                    </div>
+                    <span class="pro-badge text-white text-xs px-1 py-0.5 rounded">PRO</span>
+                </div>
+                <p id="analysis-content" class="text-xs text-gray-600 leading-relaxed">图片内容：这是一张产品价格表截图，显示基础版299元/月，专业版599元/月，年付8折优惠。用户问："你们这个价格是单人的吗？能几个人用？"</p>
+
+                <!-- 表情包识别结果（默认隐藏） -->
+                <div id="emoji-analysis" class="mt-1.5 pt-1.5 border-t border-blue-200 hidden">
+                    <div class="flex items-center space-x-1 text-pink-700 mb-1">
+                        <span class="text-xs">😊</span>
+                        <span class="text-xs font-medium">表情包情绪识别</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span id="emoji-icon" class="text-xl">😂</span>
+                        <div>
+                            <p id="emoji-meaning" class="text-xs text-gray-600">含义：大笑、搞笑、觉得很有趣</p>
+                            <p id="emoji-sentiment" class="text-xs text-green-600">情绪：积极 😊 友好</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 知识库匹配 -->
+            <div class="px-3 py-2 bg-amber-50 border-b border-amber-100 shrink-0">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center text-amber-700 text-xs">
+                        <span class="mr-1.5">📚</span>
+                        <span>匹配到 2 条话术</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 回复建议列表 -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-2">
+                <!-- 回复卡片 1 -->
+                <div class="draft-card bg-white rounded-lg p-3 shadow-sm border-2 border-green-200 cursor-pointer hover:shadow-md transition-all">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-600">知识库 92%</span>
+                    </div>
+                    <p class="text-gray-700 text-xs leading-relaxed mb-2">您好！我们有多种套餐可供选择哦~ 基础版299元/月，专业版599元/月。现在购买年卡还可以享受8折优惠，额外赠送3个月使用期呢！</p>
+                    <div class="flex space-x-2">
+                        <button onclick="copyAndPaste('您好！我们有多种套餐可供选择哦~ 基础版299元/月，专业版599元/月。现在购买年卡还可以享受8折优惠，额外赠送3个月使用期呢！')" class="flex-1 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors flex items-center justify-center space-x-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>点击发送到微信</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 回复卡片 2 -->
+                <div class="draft-card bg-white rounded-lg p-3 shadow-sm border border-gray-200 cursor-pointer hover:border-green-300 transition-all">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">AI生成</span>
+                    </div>
+                    <p class="text-gray-700 text-xs leading-relaxed mb-2">感谢您的咨询！我们的产品采用订阅制，基础版每月299元，包含全部核心功能。如果需要团队协作可以选择专业版599元/月，现在下单还有优惠活动哦~</p>
+                    <div class="flex space-x-2">
+                        <button onclick="copyAndPaste('感谢您的咨询！我们的产品采用订阅制，基础版每月299元，包含全部核心功能。如果需要团队协作可以选择专业版599元/月，现在下单还有优惠活动哦~')" class="flex-1 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors flex items-center justify-center space-x-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>点击发送到微信</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 回复卡片 3 -->
+                <div class="draft-card bg-white rounded-lg p-3 shadow-sm border border-gray-200 cursor-pointer hover:border-green-300 transition-all">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600">亲切风格</span>
+                    </div>
+                    <p class="text-gray-700 text-xs leading-relaxed mb-2">亲~我们现在有活动哦！月付299，年付更划算直接打8折，还送3个月免费使用呢！不满意7天内可以全额退款哒~</p>
+                    <div class="flex space-x-2">
+                        <button onclick="copyAndPaste('亲~我们现在有活动哦！月付299，年付更划算直接打8折，还送3个月免费使用呢！不满意7天内可以全额退款哒~')" class="flex-1 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors flex items-center justify-center space-x-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>点击发送到微信</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 常用话术 -->
+            <div class="p-3 bg-gray-50 border-t border-gray-200 shrink-0">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-gray-700">⚡ 常用话术</span>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="toggleTodoPanel()" class="text-xs text-blue-600 hover:text-blue-700 flex items-center space-x-1">
+                            <span>📋</span>
+                            <span>待办 (2)</span>
+                        </button>
+                        <button class="text-xs text-green-600 hover:text-green-700 flex items-center space-x-1">
+                            <span class="pro-badge text-white text-xs px-1 py-0.5 rounded">PRO</span>
+                            <span>管理</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                    <button onclick="copyAndPaste('好的，收到~')" class="shortcut-item px-2.5 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 hover:border-green-300 transition-all">
+                        好的收到
+                    </button>
+                    <button onclick="copyAndPaste('稍等，我确认一下')" class="shortcut-item px-2.5 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 hover:border-green-300 transition-all">
+                        稍等确认
+                    </button>
+                    <button onclick="copyAndPaste('您好，请问有什么可以帮您？')" class="shortcut-item px-2.5 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 hover:border-green-300 transition-all">
+                        礼貌问候
+                    </button>
+                    <button onclick="copyAndPaste('我晚点回复您')" class="shortcut-item px-2.5 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 hover:border-green-300 transition-all">
+                        晚点回复
+                    </button>
+                </div>
+            </div>
+
+            <!-- 待办事项面板（默认隐藏，从上往下滑出） -->
+            <div id="todo-panel" class="absolute top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-40 transform -translate-y-full transition-transform duration-300">
+                <div class="p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium text-gray-700">📋 聊天待办事项</span>
+                        <button onclick="toggleTodoPanel()" class="text-xs text-gray-400 hover:text-gray-600">收起</button>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex items-start space-x-2 p-2 bg-yellow-50 rounded-lg border border-yellow-200">
+                            <input type="checkbox" class="mt-0.5">
+                            <div class="flex-1">
+                                <p class="text-xs text-gray-800">明天下午3点和王总确认合同细节</p>
+                                <p class="text-xs text-gray-400 mt-0.5">来自：和王总的聊天 · 今天 14:23</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                            <input type="checkbox" class="mt-0.5">
+                            <div class="flex-1">
+                                <p class="text-xs text-gray-800">下周五之前给李经理发产品报价单</p>
+                                <p class="text-xs text-gray-400 mt-0.5">来自：和李经理的聊天 · 昨天 16:45</p>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="w-full mt-2 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+                        + 手动添加待办
+                    </button>
+                </div>
+            </div>
+
+            <!-- 底部提示 -->
+            <div class="p-2 bg-green-50 border-t border-green-100 shrink-0 text-center">
+                <span class="text-xs text-green-700">💡 PRO专属：收到消息自动生成回复，点击即填入微信输入框</span>
+            </div>
+        </div>
+
+        <!-- 内容润色模式 -->
+        <div id="func-polish" class="h-full flex flex-col hidden">
+            <div class="p-3 bg-white border-b border-gray-100 shrink-0">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs font-medium text-gray-700">✨ 输入你想说的话</span>
+                    <button onclick="clearPolishInput()" class="text-xs text-gray-400 hover:text-gray-600">清空</button>
+                </div>
+                <textarea id="polish-input" rows="3" placeholder="随便写，AI帮你优化..." class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-xs transition-all"></textarea>
+                <button onclick="doPolish()" class="w-full mt-2 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg text-xs font-medium hover:from-purple-600 hover:to-purple-700 transition-all">
+                    开始润色
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-3 space-y-2">
+                <div class="draft-card bg-white rounded-lg p-3 shadow-sm border border-gray-200 cursor-pointer hover:border-purple-300 transition-all">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600">更礼貌</span>
+                    </div>
+                    <p class="text-gray-700 text-xs leading-relaxed mb-2">您好，我明天有点事需要请假，工作已经安排交接好了，您看可以吗？</p>
+                    <div class="flex space-x-2">
+                        <button onclick="copyAndPaste('您好，我明天有点事需要请假，工作已经安排交接好了，您看可以吗？')" class="flex-1 py-1.5 bg-purple-500 text-white rounded-lg text-xs font-medium hover:bg-purple-600 transition-colors flex items-center justify-center space-x-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>发送到微信</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 聊天军师模式 -->
+    <div id="func-coach" class="h-full flex flex-col hidden">
+        <!-- 目标设定区 -->
+        <div class="p-3 bg-gradient-to-r from-red-50 to-orange-50 border-b border-orange-200 shrink-0">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-medium text-orange-700">🎯 本次聊天目标</span>
+                <span class="pro-badge text-white text-xs px-1 py-0.5 rounded" style="background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%);">SVIP</span>
+            </div>
+            <div class="flex items-center space-x-2 mb-2">
+                <select id="chat-goal" class="flex-1 px-2 py-1.5 bg-white border border-orange-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20">
+                    <option value="">选择聊天目标...</option>
+                    <option value="sale">说服客户买单</option>
+                    <option value="bargain">砍价/压价</option>
+                    <option value="raise">提加薪/升职</option>
+                    <option value="refuse">拒绝借钱/求助</option>
+                    <option value="apologize">道歉/挽回关系</option>
+                    <option value="debate">争论/说服对方</option>
+                    <option value="custom">自定义目标</option>
+                </select>
+            </div>
+            <textarea id="custom-goal" rows="1" placeholder="描述你想达成的具体目标..." class="w-full px-2 py-1.5 bg-white border border-orange-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 resize-none"></textarea>
+            <button onclick="startCoach()" class="w-full mt-2 py-1.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg text-xs font-medium hover:from-orange-600 hover:to-red-600 transition-all">
+                启动聊天军师
+            </button>
+        </div>
+
+        <!-- 局势分析区 -->
+        <div id="coach-analysis" class="flex-1 overflow-y-auto p-3 space-y-3">
+            <!-- 整体局势判断 -->
+            <div class="p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-gray-700">📊 当前局势判断</span>
+                    <div class="flex items-center space-x-1">
+                        <span class="text-xs text-gray-500">胜率</span>
+                        <span class="text-sm font-bold text-green-600">65%</span>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <div class="bg-gradient-to-r from-green-400 to-green-600 h-2 rounded-full" style="width: 65%"></div>
+                </div>
+                <p class="text-xs text-gray-600 leading-relaxed">对方正在犹豫价格，目前处于心理博弈关键期。你的优势是产品价值已经传递到位，对方有真实需求；劣势是对方在试探你的价格底线，不要轻易让步。</p>
+            </div>
+
+            <!-- 对方意图分析 -->
+            <div class="p-3 bg-white rounded-lg border border-blue-200 shadow-sm">
+                <div class="flex items-center space-x-1 mb-2">
+                    <span class="text-xs">🎭</span>
+                    <span class="text-xs font-medium text-blue-700">对方意图深度解析</span>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex items-start space-x-2">
+                        <span class="text-xs text-blue-500 mt-0.5">•</span>
+                        <div>
+                            <p class="text-xs font-medium text-gray-700">表面意图：</p>
+                            <p class="text-xs text-gray-600">"你们太贵了，能不能便宜点"</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-2">
+                        <span class="text-xs text-red-500 mt-0.5">•</span>
+                        <div>
+                            <p class="text-xs font-medium text-gray-700">真实意图：</p>
+                            <p class="text-xs text-gray-600">不是买不起，是想确认自己有没有买亏，寻求心理安全感</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start space-x-2">
+                        <span class="text-xs text-orange-500 mt-0.5">•</span>
+                        <div>
+                            <p class="text-xs font-medium text-gray-700">情绪状态：</p>
+                            <p class="text-xs text-gray-600">理性谈判中，略带焦虑，担心错过优惠</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI策略建议 -->
+            <div class="p-3 bg-white rounded-lg border border-purple-200 shadow-sm">
+                <div class="flex items-center space-x-1 mb-2">
+                    <span class="text-xs">💡</span>
+                    <span class="text-xs font-medium text-purple-700">军师策略建议</span>
+                </div>
+                <div class="space-y-2">
+                    <div class="p-2 bg-purple-50 rounded-lg">
+                        <p class="text-xs font-medium text-purple-700 mb-1">✅ 应该做的：</p>
+                        <ul class="text-xs text-purple-600 space-y-1">
+                            <li>• 强调价值而非价格，对比竞品突出我们的优势</li>
+                            <li>• 可以给小优惠，但要有前提条件（比如现在下单）</li>
+                            <li>• 制造稀缺感，提醒优惠倒计时</li>
+                        </ul>
+                    </div>
+                    <div class="p-2 bg-red-50 rounded-lg">
+                        <p class="text-xs font-medium text-red-700 mb-1">❌ 绝对不要做的：</p>
+                        <ul class="text-xs text-red-600 space-y-1">
+                            <li>• 不要一上来就大幅降价，会让对方觉得水分很大</li>
+                            <li>• 不要被对方的"别家更便宜"话术带节奏</li>
+                            <li>• 不要显得比对方还急着成交</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 推荐话术 -->
+            <div class="p-3 bg-white rounded-lg border border-green-200 shadow-sm">
+                <div class="flex items-center space-x-1 mb-2">
+                    <span class="text-xs">🗣️</span>
+                    <span class="text-xs font-medium text-green-700">推荐回复话术</span>
+                </div>
+                <div class="space-y-2">
+                    <div class="draft-card p-2 rounded-lg border border-green-200 bg-green-50 cursor-pointer hover:shadow-sm transition-all" onclick="copyAndPaste('理解您的顾虑！确实价格不是最便宜的，但我们的服务和效果是行业公认的。您看这样，今天下单的话我额外送您一个月服务，这个优惠只限于今天哦~')">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-600">策略：价值锚定 + 限时优惠</span>
+                        </div>
+                        <p class="text-xs text-gray-700 leading-relaxed">理解您的顾虑！确实价格不是最便宜的，但我们的服务和效果是行业公认的。您看这样，今天下单的话我额外送您一个月服务，这个优惠只限于今天哦~</p>
+                    </div>
+                    <div class="draft-card p-2 rounded-lg border border-blue-200 bg-blue-50 cursor-pointer hover:shadow-sm transition-all" onclick="copyAndPaste('哥，价格真的是底线了。这样，我私人给您包一年售后，有任何问题随时找我，我亲自给您处理，这待遇一般只有年付客户才有。')">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">策略：非价格让步 + 人情绑定</span>
+                        </div>
+                        <p class="text-xs text-gray-700 leading-relaxed">哥，价格真的是底线了。这样，我私人给您包一年售后，有任何问题随时找我，我亲自给您处理，这待遇一般只有年付客户才有。</p>
+                    </div>
+                    <div class="draft-card p-2 rounded-lg border border-orange-200 bg-orange-50 cursor-pointer hover:shadow-sm transition-all" onclick="copyAndPaste('哈哈哥，您都跟我聊这么久了，我肯定想给您最优惠的价格。但公司规定确实没办法，您要是实在预算差一点，要不先买个基础版用着，效果好再升级？')">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600">策略：示弱 + 降维成交</span>
+                        </div>
+                        <p class="text-xs text-gray-700 leading-relaxed">哈哈哥，您都跟我聊这么久了，我肯定想给您最优惠的价格。但公司规定确实没办法，您要是实在预算差一点，要不先买个基础版用着，效果好再升级？</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下一步行动指引 -->
+            <div class="p-3 bg-gradient-to-r from-yellow-50 to-amber-50 rounded-lg border border-yellow-200 shadow-sm">
+                <div class="flex items-center space-x-1 mb-2">
+                    <span class="text-xs">🎯</span>
+                    <span class="text-xs font-medium text-amber-700">下一步行动指引</span>
+                </div>
+                <p class="text-xs text-amber-700 font-medium mb-1">当前阶段：谈判关键期 → 逼单最佳时机</p>
+                <p class="text-xs text-amber-600">建议今天之内完成逼单，不要拖到明天，夜长梦多。对方今晚大概率会对比其他家，你需要给他一个"现在下单最划算"的理由。</p>
+            </div>
+        </div>
+
+        <!-- 底部提示 -->
+        <div class="p-2 bg-gradient-to-r from-purple-50 to-indigo-50 border-t border-purple-200 shrink-0 text-center">
+            <span class="text-xs text-purple-700">💡 聊天军师全程陪同，每一步都帮你算得明明白白</span>
+        </div>
+    </div>
+
+    <!-- 联系人面板 -->
+    <div id="func-contacts" class="h-full flex flex-col hidden">
+        <div class="p-2 bg-gray-50 border-b border-gray-200 shrink-0">
+            <input type="text" placeholder="搜索联系人..." class="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-green-500/20">
+        </div>
+        <div class="flex-1 overflow-y-auto">
+            <!-- 联系人列表 -->
+            <div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100" onclick="selectContact('张三')">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-sm">张</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-gray-800">张三（客户）</span>
+                            <span class="text-xs text-gray-400">14:23</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <p class="text-xs text-gray-500 truncate max-w-[180px]">你们产品怎么收费的？</p>
+                            <span class="w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center">2</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100" onclick="selectContact('李四')">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm">李</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-gray-800">李四（同事）</span>
+                            <span class="text-xs text-gray-400">13:15</span>
+                        </div>
+                        <p class="text-xs text-gray-500 truncate max-w-[220px]">明天的会议改到下午3点</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100" onclick="selectContact('王五')">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-sm">王</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-gray-800">王五（伙伴）</span>
+                            <span class="text-xs text-gray-400">昨天</span>
+                        </div>
+                        <p class="text-xs text-gray-500 truncate max-w-[220px]">合同我看了，没问题，可以签</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-3 bg-amber-50 text-center border-b border-amber-100">
+                <p class="text-xs text-amber-600">
+                    <span class="pro-badge text-white text-xs px-1 py-0.5 rounded mr-1">SVIP</span>
+                    升级SVIP支持监控无限联系人
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 话术面板 -->
+    <div id="func-shortcuts" class="h-full flex flex-col hidden">
+        <div class="p-2 bg-gray-50 border-b border-gray-200 shrink-0 flex items-center space-x-2">
+            <button class="px-2.5 py-1 bg-green-500 text-white rounded-full text-xs font-medium">全部</button>
+            <button class="px-2.5 py-1 bg-gray-200 text-gray-600 rounded-full text-xs hover:bg-gray-300 transition-colors">客户</button>
+            <button class="px-2.5 py-1 bg-gray-200 text-gray-600 rounded-full text-xs hover:bg-gray-300 transition-colors">同事</button>
+            <button class="px-2.5 py-1 bg-gray-200 text-gray-600 rounded-full text-xs hover:bg-gray-300 transition-colors">家人</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-2 space-y-2">
+            <div class="p-3 bg-white rounded-lg border border-gray-200 hover:border-green-300 cursor-pointer transition-all">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-medium text-gray-700">礼貌问候</span>
+                    <span class="text-xs text-green-600">使用 328 次</span>
+                </div>
+                <p class="text-xs text-gray-600">您好，请问有什么可以帮您？</p>
+                <button onclick="copyAndPaste('您好，请问有什么可以帮您？')" class="mt-2 w-full py-1 bg-green-50 text-green-600 rounded text-xs hover:bg-green-100 transition-colors">
+                    点击使用
+                </button>
+            </div>
+            <div class="p-3 bg-white rounded-lg border border-gray-200 hover:border-green-300 cursor-pointer transition-all">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-medium text-gray-700">稍后回复</span>
+                    <span class="text-xs text-green-600">使用 256 次</span>
+                </div>
+                <p class="text-xs text-gray-600">我现在有点忙，晚点回复您哈~</p>
+                <button onclick="copyAndPaste('我现在有点忙，晚点回复您哈~')" class="mt-2 w-full py-1 bg-green-50 text-green-600 rounded text-xs hover:bg-green-100 transition-colors">
+                    点击使用
+                </button>
+            </div>
+            <div class="p-3 bg-white rounded-lg border border-gray-200 hover:border-green-300 cursor-pointer transition-all">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-medium text-gray-700">收到确认</span>
+                    <span class="text-xs text-green-600">使用 512 次</span>
+                </div>
+                <p class="text-xs text-gray-600">好的收到，我马上去处理！</p>
+                <button onclick="copyAndPaste('好的收到，我马上去处理！')" class="mt-2 w-full py-1 bg-green-50 text-green-600 rounded text-xs hover:bg-green-100 transition-colors">
+                    点击使用
+                </button>
+            </div>
+        </div>
+        <div class="p-3 bg-gray-50 border-t border-gray-200 shrink-0">
+            <button class="w-full py-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg text-xs font-medium hover:from-purple-600 hover:to-indigo-600 transition-all">
+                + 添加新话术
+            </button>
+        </div>
+    </div>
+
+    <!-- 数据分析面板 -->
+    <div id="func-analysis" class="h-full flex flex-col hidden">
+        <div class="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200 shrink-0">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-medium text-blue-700">📊 本周聊天统计</span>
+                <span class="pro-badge text-white text-xs px-1 py-0.5 rounded" style="background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);">SVIP</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+                <div class="bg-white rounded p-2 text-center">
+                    <p class="text-lg font-bold text-blue-600">128</p>
+                    <p class="text-xs text-gray-500">回复消息</p>
+                </div>
+                <div class="bg-white rounded p-2 text-center">
+                    <p class="text-lg font-bold text-green-600">85%</p>
+                    <p class="text-xs text-gray-500">AI生成率</p>
+                </div>
+                <div class="bg-white rounded p-2 text-center">
+                    <p class="text-lg font-bold text-purple-600">2.3h</p>
+                    <p class="text-xs text-gray-500">节省时间</p>
+                </div>
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto p-3 space-y-3">
+            <!-- 聊天关系强度 -->
+            <div class="p-3 bg-white rounded-lg border border-gray-200">
+                <p class="text-xs font-medium text-gray-700 mb-2">💞 聊天关系强度</p>
+                <div class="space-y-2">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-xs">张</div>
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between mb-0.5">
+                                <span class="text-xs text-gray-700">张三（客户）</span>
+                                <span class="text-xs text-green-600">高</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1">
+                                <div class="bg-green-500 h-1 rounded-full" style="width: 85%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs">李</div>
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between mb-0.5">
+                                <span class="text-xs text-gray-700">李四（同事）</span>
+                                <span class="text-xs text-yellow-600">中</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1">
+                                <div class="bg-yellow-500 h-1 rounded-full" style="width: 45%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">⚠️ 您和「赵总」已经15天没联系了，建议维护关系</p>
+            </div>
+
+            <!-- 智能提醒 -->
+            <div class="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                <p class="text-xs font-medium text-orange-700 mb-2">⏰ 近期待办提醒</p>
+                <div class="space-y-1.5">
+                    <div class="flex items-start space-x-1.5">
+                        <span class="text-orange-500 text-xs">•</span>
+                        <p class="text-xs text-orange-600">明天15:00 和王总确认合同细节</p>
+                    </div>
+                    <div class="flex items-start space-x-1.5">
+                        <span class="text-orange-500 text-xs">•</span>
+                        <p class="text-xs text-orange-600">下周五前 给李经理发产品报价单</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 群聊分析入口 -->
+            <div onclick="openGroupAnalysis()" class="p-3 bg-purple-50 rounded-lg border border-purple-200 cursor-pointer hover:bg-purple-100 transition-all">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-medium text-purple-700">👥 群聊智能分析</p>
+                        <p class="text-xs text-purple-500 mt-0.5">识别广告、总结话题、防诈骗</p>
+                    </div>
+                    <span class="pro-badge text-white text-xs px-1.5 py-0.5 rounded-full" style="background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);">SVIP</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl w-full max-w-sm mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <h3 class="text-sm font-bold text-gray-800">⚙️ 设置</h3>
+                        <span class="pro-badge text-white text-xs px-1.5 py-0.5 rounded-full">PRO</span>
+                    </div>
+                    <button onclick="toggleSettings()" class="p-1 hover:bg-gray-100 rounded transition-colors">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 space-y-3">
+                <!-- 自动吸附 -->
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                        <p class="text-sm font-medium text-gray-800">自动吸附到微信</p>
+                        <p class="text-xs text-gray-500 mt-0.5">启动时自动贴到微信窗口右侧</p>
+                    </div>
+                    <button onclick="toggleSwitch('auto-dock')" id="auto-dock-toggle" class="w-11 h-6 bg-green-500 rounded-full relative transition-colors">
+                        <div id="auto-dock-dot" class="w-4 h-4 bg-white rounded-full absolute top-1 right-1 shadow transition-transform"></div>
+                    </button>
+                </div>
+
+                <!-- 自动粘贴 -->
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                        <p class="text-sm font-medium text-gray-800">自动粘贴到微信</p>
+                        <p class="text-xs text-gray-500 mt-0.5">点击回复后自动切到微信并粘贴</p>
+                    </div>
+                    <button onclick="toggleSwitch('auto-paste')" id="auto-paste-toggle" class="w-11 h-6 bg-green-500 rounded-full relative transition-colors">
+                        <div id="auto-paste-dot" class="w-4 h-4 bg-white rounded-full absolute top-1 right-1 shadow transition-transform"></div>
+                    </button>
+                </div>
+
+                <!-- 聊天风格设置 -->
+                <div onclick="openStyleSettings()" class="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors">
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <p class="text-sm font-medium text-gray-800">🎭 个性化聊天风格</p>
+                            <span class="pro-badge text-white text-xs px-1.5 py-0.5 rounded-full">PRO</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">导入聊天记录，AI学习您的说话方式</p>
+                    </div>
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </div>
+
+                <!-- 智能用户画像 -->
+                <div onclick="openUserProfiling()" class="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200 cursor-pointer hover:bg-red-100 transition-colors">
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <p class="text-sm font-medium text-gray-800">🔍 智能用户画像</p>
+                            <span class="pro-badge text-white text-xs px-1.5 py-0.5 rounded-full">PRO</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">分析聊天记录，识别特征、爱好、诈骗风险</p>
+                    </div>
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </div>
+
+                <!-- 分隔线 -->
+                <div class="border-t border-gray-200 my-2"></div>
+                <p class="text-xs font-medium text-gray-500 px-1">⭐ PRO 专属功能</p>
+
+                <!-- 剪贴板监听 -->
+                <div class="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <p class="text-sm font-medium text-gray-800">剪贴板自动监听</p>
+                            <span class="pro-badge text-white text-xs px-1.5 py-0.5 rounded-full">PRO</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">在微信复制消息后自动生成回复</p>
+                    </div>
+                    <button onclick="toggleSwitchPro('clipboard-listener')" id="clipboard-listener-toggle" class="w-11 h-6 bg-green-500 rounded-full relative transition-colors">
+                        <div id="clipboard-listener-dot" class="w-4 h-4 bg-white rounded-full absolute top-1 right-1 shadow transition-transform"></div>
+                    </button>
+                </div>
+
+                <!-- 系统通知监听 -->
+                <div class="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <p class="text-sm font-medium text-gray-800">系统通知自动监听</p>
+                            <span class="pro-badge text-white text-xs px-1.5 py-0.5 rounded-full">PRO</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">收到微信消息通知时自动生成回复</p>
+                    </div>
+                    <button onclick="toggleSwitchPro('notification-listener')" id="notification-listener-toggle" class="w-11 h-6 bg-green-500 rounded-full relative transition-colors">
+                        <div id="notification-listener-dot" class="w-4 h-4 bg-white rounded-full absolute top-1 right-1 shadow transition-transform"></div>
+                    </button>
+                </div>
+
+                <!-- UI Automation读消息 -->
+                <div class="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <p class="text-sm font-medium text-gray-800">读取微信窗口内容</p>
+                            <span class="pro-badge text-white text-xs px-1.5 py-0.5 rounded-full">PRO</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">直接读取聊天窗口，支持长消息完整内容</p>
+                    </div>
+                    <button onclick="toggleSwitchPro('ui-automation')" id="ui-automation-toggle" class="w-11 h-6 bg-gray-300 rounded-full relative transition-colors">
+                        <div id="ui-automation-dot" class="w-4 h-4 bg-white rounded-full absolute top-1 left-1 shadow transition-transform"></div>
+                    </button>
+                </div>
+
+                <!-- 智能图片/文件识别 -->
+                <div class="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <p class="text-sm font-medium text-gray-800">智能图片/文件识别</p>
+                            <span class="pro-badge text-white text-xs px-1.5 py-0.5 rounded-full">PRO</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">分析截图、图片、表情包、文档内容</p>
+                    </div>
+                    <button onclick="toggleSwitchPro('multimodal')" id="multimodal-toggle" class="w-11 h-6 bg-green-500 rounded-full relative transition-colors">
+                        <div id="multimodal-dot" class="w-4 h-4 bg-white rounded-full absolute top-1 right-1 shadow transition-transform"></div>
+                    </button>
+                </div>
+
+                <!-- 表情包智能识别 -->
+                <div class="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <p class="text-sm font-medium text-gray-800">表情包情绪识别</p>
+                            <span class="pro-badge text-white text-xs px-1.5 py-0.5 rounded-full">PRO</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">识别微信表情和表情包，理解情绪含义</p>
+                    </div>
+                    <button onclick="toggleSwitchPro('emoji-recognition')" id="emoji-recognition-toggle" class="w-11 h-6 bg-green-500 rounded-full relative transition-colors">
+                        <div id="emoji-recognition-dot" class="w-4 h-4 bg-white rounded-full absolute top-1 right-1 shadow transition-transform"></div>
+                    </button>
+                </div>
+
+                <!-- 安全说明 -->
+                <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <h4 class="text-xs font-medium text-blue-700 mb-2 flex items-center">
+                        <span class="mr-1.5">🛡️</span>
+                        关于安全与隐私
+                    </h4>
+                    <ul class="text-xs text-blue-600 space-y-1">
+                        <li>• 所有功能均使用 Windows 官方 API 实现</li>
+                        <li>• 不注入、不破解、不修改微信任何程序</li>
+                        <li>• 您的聊天数据只在本地处理，不上传任何服务器</li>
+                        <li>• <strong>绝对不会自动按回车发送消息</strong></li>
+                    </ul>
+                </div>
+
+                <!-- 升级PRO -->
+                <div class="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+                    <div class="flex items-center space-x-2 mb-3">
+                        <span class="text-2xl">👑</span>
+                        <div>
+                            <h4 class="text-sm font-bold text-amber-800">升级到专业版</h4>
+                            <p class="text-xs text-amber-600">解锁全部高级功能</p>
+                        </div>
+                    </div>
+                    <ul class="text-xs text-amber-700 space-y-1.5 mb-3">
+                        <li class="flex items-center space-x-1.5">
+                            <span class="text-green-500">✓</span>
+                            <span>剪贴板监听：复制消息后自动生成回复</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5">
+                            <span class="text-green-500">✓</span>
+                            <span>通知监听：收到消息自动生成（零操作）</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5">
+                            <span class="text-green-500">✓</span>
+                            <span>UI Automation：完整读取微信窗口内容</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5">
+                            <span class="text-green-500">✓</span>
+                            <span>无限知识库、历史记录、自定义AI模型</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5">
+                            <span class="text-green-500">✓</span>
+                            <span>智能图片识别：截图、表情包、文档分析</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5">
+                            <span class="text-green-500">✓</span>
+                            <span>个性化聊天风格：AI学习您的说话方式</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5">
+                            <span class="text-green-500">✓</span>
+                            <span>智能用户画像：特征分析 + 反诈风险预警</span>
+                        </li>
+                    </ul>
+                    <button class="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg text-sm font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-md">
+                        立即升级 PRO - 39元/月
+                    </button>
+                    <p class="text-xs text-amber-600 text-center mt-2">支持7天无理由退款</p>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+                <button onclick="toggleSettings()" class="w-full py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors">
+                    确定
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 智能用户画像弹窗 -->
+    <div id="user-profiling-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] hidden">
+        <div class="bg-white rounded-xl w-full max-w-sm mx-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div class="p-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-gray-800">🔍 智能用户画像</h3>
+                    <button onclick="closeUserProfiling()" class="p-1 hover:bg-gray-100 rounded transition-colors">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 space-y-4">
+                <!-- 上传区域 -->
+                <div id="profiling-upload-section">
+                    <div class="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                        <div class="text-3xl mb-2">📊</div>
+                        <p class="text-xs font-medium text-gray-700 mb-1">导入聊天记录生成画像</p>
+                        <p class="text-xs text-gray-500 mb-3">支持微信聊天记录导出文件，AI深度分析对方特征</p>
+                        <label class="inline-block px-4 py-2 bg-purple-500 text-white rounded-lg text-xs font-medium cursor-pointer hover:bg-purple-600 transition-colors">
+                            选择聊天记录文件
+                            <input type="file" accept=".txt,.csv,.json" class="hidden" onchange="analyzeUserProfile(event)">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 分析进度（默认隐藏） -->
+                <div id="profiling-progress" class="hidden">
+                    <div class="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-medium text-purple-700">正在深度分析聊天记录...</span>
+                            <span id="profiling-percent" class="text-xs text-purple-600 font-medium">0%</span>
+                        </div>
+                        <div class="w-full bg-purple-200 rounded-full h-1.5 mb-2">
+                            <div id="profiling-bar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <p id="profiling-step" class="text-xs text-purple-600">正在提取对话特征...</p>
+                    </div>
+                </div>
+
+                <!-- 分析结果（默认隐藏） -->
+                <div id="profiling-result" class="hidden space-y-3">
+                    <!-- 基本信息卡片 -->
+                    <div class="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <span class="text-lg">👤</span>
+                            <span class="text-xs font-medium text-blue-700">基本特征</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="bg-white rounded p-2">
+                                <p class="text-xs text-gray-500">预估年龄</p>
+                                <p class="text-sm font-medium text-gray-800">25-35岁</p>
+                            </div>
+                            <div class="bg-white rounded p-2">
+                                <p class="text-xs text-gray-500">性别倾向</p>
+                                <p class="text-sm font-medium text-gray-800">男性</p>
+                            </div>
+                            <div class="bg-white rounded p-2">
+                                <p class="text-xs text-gray-500">沟通风格</p>
+                                <p class="text-sm font-medium text-gray-800">直接务实</p>
+                            </div>
+                            <div class="bg-white rounded p-2">
+                                <p class="text-xs text-gray-500">职业倾向</p>
+                                <p class="text-sm font-medium text-gray-800">销售/商务</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 兴趣爱好 -->
+                    <div class="p-3 bg-white rounded-lg border border-gray-200">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <span class="text-lg">❤️</span>
+                            <span class="text-xs font-medium text-gray-700">兴趣爱好标签</span>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5">
+                            <span class="text-xs bg-pink-100 text-pink-600 px-2 py-0.5 rounded-full">💰 投资理财</span>
+                            <span class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">🚗 汽车</span>
+                            <span class="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">🏃 健身</span>
+                            <span class="text-xs bg-yellow-100 text-yellow-600 px-2 py-0.5 rounded-full">📈 搞钱</span>
+                            <span class="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">🎮 游戏</span>
+                        </div>
+                    </div>
+
+                    <!-- 行为模式 -->
+                    <div class="p-3 bg-white rounded-lg border border-gray-200">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <span class="text-lg">📅</span>
+                            <span class="text-xs font-medium text-gray-700">行为模式</span>
+                        </div>
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-600">活跃时段</span>
+                                <span class="text-xs font-medium text-gray-800">工作日 9:00-18:00</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-600">回复速度</span>
+                                <span class="text-xs font-medium text-gray-800">较快（平均5分钟）</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-600">消息长度</span>
+                                <span class="text-xs font-medium text-gray-800">短句为主，直奔主题</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-600">常用话术</span>
+                                <span class="text-xs font-medium text-gray-800">礼貌客气，多用敬语</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 风险预警 -->
+                    <div class="p-3 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg border border-orange-200">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-lg">⚠️</span>
+                                <span class="text-xs font-medium text-orange-700">风险评估</span>
+                            </div>
+                            <div class="flex items-center space-x-1">
+                                <span class="text-xs text-gray-500">安全评分</span>
+                                <span class="text-sm font-bold text-green-600">85</span>
+                                <span class="text-xs text-gray-400">/100</span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <div class="flex items-center space-x-1.5">
+                                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                                <span class="text-xs text-gray-600">未检测到诈骗关键词</span>
+                            </div>
+                            <div class="flex items-center space-x-1.5">
+                                <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                                <span class="text-xs text-gray-600">💰 多次提及金额、投资（需注意）</span>
+                            </div>
+                            <div class="flex items-center space-x-1.5">
+                                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                                <span class="text-xs text-gray-600">未要求转账、汇款等敏感操作</span>
+                            </div>
+                            <div class="flex items-center space-x-1.5">
+                                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                                <span class="text-xs text-gray-600">身份信息前后一致，无矛盾</span>
+                            </div>
+                        </div>
+
+                        <div class="mt-2 p-2 bg-yellow-50 rounded border border-yellow-200">
+                            <p class="text-xs font-medium text-yellow-700 mb-0.5">💡 AI 安全建议</p>
+                            <p class="text-xs text-yellow-600">对方多次提及投资相关话题，沟通时请注意核实对方真实身份，涉及金钱交易务必谨慎。</p>
+                        </div>
+                    </div>
+
+                    <!-- 沟通建议 -->
+                    <div class="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <span class="text-lg">💬</span>
+                            <span class="text-xs font-medium text-green-700">最佳沟通建议</span>
+                        </div>
+                        <ul class="text-xs text-green-600 space-y-1">
+                            <li class="flex items-start space-x-1">
+                                <span>•</span>
+                                <span>对方喜欢直接沟通，建议开门见山，少用客套话</span>
+                            </li>
+                            <li class="flex items-start space-x-1">
+                                <span>•</span>
+                                <span>工作日白天回复效率最高，急事可直接打电话</span>
+                            </li>
+                            <li class="flex items-start space-x-1">
+                                <span>•</span>
+                                <span>可以适当聊投资、汽车话题拉近距离</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <button onclick="closeUserProfiling()" class="w-full py-2 bg-purple-500 text-white rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors">
+                        完成分析
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 聊天风格设置弹窗 -->
+    <div id="style-settings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] hidden">
+        <div class="bg-white rounded-xl w-full max-w-sm mx-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div class="p-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-gray-800">🎭 个性化聊天风格</h3>
+                    <button onclick="closeStyleSettings()" class="p-1 hover:bg-gray-100 rounded transition-colors">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 space-y-4">
+                <!-- 当前风格卡片 -->
+                <div class="p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium text-purple-700">当前使用</span>
+                        <span id="current-style-name" class="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full">标准专业</span>
+                    </div>
+                    <p id="current-style-desc" class="text-xs text-gray-600">正式、礼貌、专业的商务沟通风格，适合客户和同事沟通</p>
+                </div>
+
+                <!-- 风格预设库 -->
+                <div>
+                    <p class="text-xs font-medium text-gray-700 mb-2">选择预设风格</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="selectStyle('professional')" class="style-card p-2.5 rounded-lg border-2 border-purple-300 bg-purple-50 text-left transition-all hover:shadow-sm" data-style="professional">
+                            <div class="text-base mb-1">💼</div>
+                            <p class="text-xs font-medium text-gray-800">标准专业</p>
+                            <p class="text-xs text-gray-500 mt-0.5">适合商务沟通</p>
+                        </button>
+                        <button onclick="selectStyle('friendly')" class="style-card p-2.5 rounded-lg border border-gray-200 bg-white text-left transition-all hover:shadow-sm hover:border-purple-300" data-style="friendly">
+                            <div class="text-base mb-1">😊</div>
+                            <p class="text-xs font-medium text-gray-800">亲切友好</p>
+                            <p class="text-xs text-gray-500 mt-0.5">朋友式轻松语气</p>
+                        </button>
+                        <button onclick="selectStyle('concise')" class="style-card p-2.5 rounded-lg border border-gray-200 bg-white text-left transition-all hover:shadow-sm hover:border-purple-300" data-style="concise">
+                            <div class="text-base mb-1">⚡</div>
+                            <p class="text-xs font-medium text-gray-800">简洁高效</p>
+                            <p class="text-xs text-gray-500 mt-0.5">少说废话直达重点</p>
+                        </button>
+                        <button onclick="selectStyle('humorous')" class="style-card p-2.5 rounded-lg border border-gray-200 bg-white text-left transition-all hover:shadow-sm hover:border-purple-300" data-style="humorous">
+                            <div class="text-base mb-1">😄</div>
+                            <p class="text-xs font-medium text-gray-800">幽默风趣</p>
+                            <p class="text-xs text-gray-500 mt-0.5">轻松有趣的表达</p>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 分隔线 -->
+                <div class="border-t border-gray-200 my-1"></div>
+
+                <!-- AI风格学习区 -->
+                <div>
+                    <p class="text-xs font-medium text-gray-700 mb-2">🧠 AI学习您的风格</p>
+                    <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p class="text-xs text-gray-600 mb-3">上传您的微信聊天记录，AI将分析并学习您的说话方式，生成的回复更像您！</p>
+
+                        <!-- 上传区域 -->
+                        <div id="upload-area" class="mb-3">
+                            <label class="flex flex-col items-center justify-center w-full px-3 py-4 bg-white border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all">
+                                <div class="text-xl mb-1">📁</div>
+                                <span class="text-xs text-gray-500">点击选择聊天记录文件</span>
+                                <span class="text-xs text-gray-400 mt-0.5">支持 .txt, .csv, .json 格式</span>
+                                <input type="file" accept=".txt,.csv,.json" class="hidden" onchange="analyzeChatHistory(event)">
+                            </label>
+                        </div>
+
+                        <!-- 分析进度（默认隐藏） -->
+                        <div id="analysis-progress" class="hidden">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-medium text-gray-700">正在分析您的聊天风格...</span>
+                                <span id="analysis-percent" class="text-xs text-purple-600 font-medium">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5 mb-2">
+                                <div id="progress-bar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                            <p id="analysis-step" class="text-xs text-gray-500">正在读取聊天记录...</p>
+                        </div>
+
+                        <!-- 分析结果（默认隐藏） -->
+                        <div id="analysis-result" class="hidden">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-medium text-green-700 flex items-center">
+                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    风格分析完成！
+                                </span>
+                                <button onclick="applyLearnedStyle()" class="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full hover:bg-purple-600 transition-colors">
+                                    应用此风格
+                                </button>
+                            </div>
+
+                            <div class="space-y-2">
+                                <div class="p-2 bg-white rounded border border-gray-200">
+                                    <p class="text-xs font-medium text-gray-700 mb-1">📊 提取的风格特征</p>
+                                    <div class="flex flex-wrap gap-1">
+                                        <span class="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">喜欢用表情</span>
+                                        <span class="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">语气谦逊</span>
+                                        <span class="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">句子较短</span>
+                                        <span class="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">常用叠词</span>
+                                    </div>
+                                </div>
+                                <div class="p-2 bg-white rounded border border-gray-200">
+                                    <p class="text-xs font-medium text-gray-700 mb-1">💬 常用口头禅</p>
+                                    <p class="text-xs text-gray-600">"好的~"、"明白了"、"收到"、"哈哈"</p>
+                                </div>
+                                <div class="p-2 bg-white rounded border border-gray-200">
+                                    <p class="text-xs font-medium text-gray-700 mb-1">📝 回复示例</p>
+                                    <p class="text-xs text-gray-600 italic">"好的收到~ 我马上去处理哈 😊"</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 已保存的自定义风格 -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <p class="text-xs font-medium text-gray-700">我的风格库</p>
+                        <button class="text-xs text-purple-600 hover:text-purple-700">管理</button>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between p-2.5 bg-white rounded-lg border border-gray-200">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm">👤</span>
+                                <div>
+                                    <p class="text-xs font-medium text-gray-800">我的风格 v1</p>
+                                    <p class="text-xs text-gray-500">2024-04-20 创建</p>
+                                </div>
+                            </div>
+                            <button onclick="selectStyle('my-style-1')" class="text-xs text-gray-500 hover:text-purple-600">使用</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 风格强度调节 -->
+                <div class="p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <p class="text-xs font-medium text-gray-700">风格匹配强度</p>
+                        <span id="style-intensity-value" class="text-xs text-purple-600 font-medium">70%</span>
+                    </div>
+                    <input type="range" min="0" max="100" value="70" oninput="updateStyleIntensity(this.value)" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500">
+                    <div class="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>保守</span>
+                        <span>平衡</span>
+                        <span>激进</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 激活码验证弹窗 -->
+    <div id="activation-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] hidden">
+        <div class="bg-white rounded-xl w-full max-w-xs mx-4 shadow-2xl overflow-hidden">
+            <!-- 标签页切换 -->
+            <div class="flex border-b border-gray-100">
+                <button onclick="switchActivationTab('online')" id="tab-online" class="flex-1 py-2.5 text-sm font-medium text-green-600 border-b-2 border-green-500 bg-green-50 transition-all">
+                    在线激活
+                </button>
+                <button onclick="switchActivationTab('offline')" id="tab-offline" class="flex-1 py-2.5 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:bg-gray-50 transition-all">
+                    离线激活
+                </button>
+            </div>
+
+            <!-- 在线激活内容 -->
+            <div id="activation-online" class="p-4">
+                <div class="text-center mb-4">
+                    <div class="text-3xl mb-2">🔑</div>
+                    <h3 class="text-base font-bold text-gray-800">输入激活码</h3>
+                    <p class="text-xs text-gray-500 mt-1">输入您购买的激活码解锁 PRO 功能</p>
+                </div>
+
+                <div class="mb-3">
+                    <input type="text" id="activation-code" placeholder="XXXX-XXXX-XXXX-XXXX"
+                        class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-center tracking-wider font-mono"
+                        maxlength="19">
+                </div>
+
+                <div class="mb-3 p-2.5 bg-blue-50 rounded-lg">
+                    <div class="flex items-start space-x-1.5">
+                        <span class="text-xs">💻</span>
+                        <div>
+                            <p class="text-xs font-medium text-blue-700">本机硬件码</p>
+                            <p id="hardware-id" class="text-xs text-blue-600 font-mono mt-0.5 select-all">ABCD-1234-WXYZ-5678</p>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="verifyActivation()" class="w-full py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors mb-2">
+                    立即激活
+                </button>
+
+                <button onclick="document.getElementById('activation-modal').classList.add('hidden')" class="w-full py-2 text-gray-500 text-sm hover:text-gray-700">
+                    稍后激活
+                </button>
+            </div>
+
+            <!-- 离线激活内容 -->
+            <div id="activation-offline" class="p-4 hidden">
+                <div class="text-center mb-4">
+                    <div class="text-3xl mb-2">🔒</div>
+                    <h3 class="text-base font-bold text-gray-800">离线激活</h3>
+                    <p class="text-xs text-gray-500 mt-1">无网络环境下的激活方式</p>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                        <p class="text-xs font-medium text-gray-700 mb-1">步骤 1：复制机器码</p>
+                        <div class="flex items-center space-x-1.5">
+                            <input type="text" readonly value="ABCD-1234-WXYZ-5678" class="flex-1 px-2 py-1.5 bg-white border border-gray-200 rounded text-xs font-mono">
+                            <button onclick="copyHardwareId()" class="px-2 py-1.5 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300 whitespace-nowrap">
+                                复制
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                        <p class="text-xs font-medium text-gray-700 mb-1">步骤 2：获取授权文件</p>
+                        <p class="text-xs text-gray-500">在其他设备访问 <span class="text-blue-600 font-mono">activate.example.com</span>，输入机器码和激活码获取授权文件</p>
+                    </div>
+
+                    <div class="p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                        <p class="text-xs font-medium text-gray-700 mb-1">步骤 3：导入授权文件</p>
+                        <label class="flex items-center justify-center w-full px-3 py-2.5 bg-white border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-green-400 hover:bg-green-50 transition-all">
+                            <span class="text-xs text-gray-500 flex items-center space-x-1">
+                                <span>📁</span>
+                                <span>点击选择授权文件 (.lic)</span>
+                            </span>
+                            <input type="file" accept=".lic" class="hidden" onchange="importLicense(event)">
+                        </label>
+                    </div>
+                </div>
+
+                <button onclick="document.getElementById('activation-modal').classList.add('hidden')" class="w-full py-2 mt-3 text-gray-500 text-sm hover:text-gray-700">
+                    稍后激活
+                </button>
+            </div>
+
+            <!-- 激活成功状态 -->
+            <div id="activation-success" class="p-4 hidden">
+                <div class="text-center">
+                    <div class="text-4xl mb-3">🎉</div>
+                    <h3 class="text-base font-bold text-gray-800 mb-1">激活成功！</h3>
+                    <p class="text-sm text-gray-500 mb-4">感谢您支持正版，已解锁全部 PRO 功能</p>
+                    <div class="p-3 bg-green-50 rounded-lg text-left mb-4">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs text-gray-500">授权类型</span>
+                            <span class="text-xs font-medium text-green-700">PRO 专业版（年付）</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-gray-500">有效期至</span>
+                            <span class="text-xs font-medium text-green-700">2027-04-27</span>
+                        </div>
+                    </div>
+                    <button onclick="completeActivation()" class="w-full py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors">
+                        开始使用 PRO
+                    </button>
+                </div>
+            </div>
+
+            <!-- 激活失败状态 -->
+            <div id="activation-error" class="p-4 hidden">
+                <div class="text-center">
+                    <div class="text-4xl mb-3">❌</div>
+                    <h3 class="text-base font-bold text-gray-800 mb-1">激活失败</h3>
+                    <p id="activation-error-msg" class="text-sm text-red-500 mb-4">激活码格式不正确</p>
+                    <button onclick="resetActivation()" class="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+                        重新输入
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 会员升级中心弹窗 -->
+    <div id="pro-upgrade-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] hidden">
+        <div class="bg-white rounded-xl w-full max-w-sm mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b border-gray-100 text-center">
+                <div class="text-3xl mb-2">👑</div>
+                <h3 class="text-base font-bold text-gray-800">解锁会员专属功能</h3>
+                <p class="text-xs text-gray-500 mt-1">选择适合您的会员套餐</p>
+            </div>
+
+            <div class="p-4 space-y-3">
+                <!-- PRO专业版 -->
+                <div class="p-4 rounded-xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 relative">
+                    <div class="absolute -top-2 -left-2 bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                        推荐
+                    </div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center space-x-1.5">
+                            <span class="text-lg">⭐</span>
+                            <span class="text-sm font-bold text-gray-800">PRO 专业版</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-lg font-bold text-amber-600">¥29</span>
+                            <span class="text-xs text-gray-500">/月</span>
+                        </div>
+                    </div>
+                    <ul class="space-y-1 mb-3">
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span class="text-amber-500">✓</span>
+                            <span>系统通知自动监听（零操作）</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span class="text-amber-500">✓</span>
+                            <span>剪贴板自动监听 + UI Automation</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span class="text-amber-500">✓</span>
+                            <span>智能图片/表情包/文档识别</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span class="text-amber-500">✓</span>
+                            <span>个性化聊天风格学习</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span class="text-amber-500">✓</span>
+                            <span>智能用户画像 + 反诈预警</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span class="text-amber-500">✓</span>
+                            <span>无限知识库容量</span>
+                        </li>
+                    </ul>
+                    <button class="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg text-sm font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-md">
+                        立即开通 PRO
+                    </button>
+                </div>
+
+                <!-- SVIP超级会员 -->
+                <div class="p-4 rounded-xl border-2 border-purple-400 bg-gradient-to-br from-purple-50 to-indigo-50 relative overflow-hidden">
+                    <div class="absolute -top-2 -right-2" style="width: 80px; height: 80px; background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%); border-radius: 50%; opacity: 0.1;"></div>
+                    <div class="absolute -top-2 -left-2" style="background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%);" class="text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                        至尊
+                    </div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center space-x-1.5">
+                            <span class="text-lg">👑</span>
+                            <span class="text-sm font-bold text-gray-800">SVIP 超级会员</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-lg font-bold" style="background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">¥59</span>
+                            <span class="text-xs text-gray-500">/月</span>
+                        </div>
+                    </div>
+                    <ul class="space-y-1 mb-3">
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span style="color: #8b5cf6;">✓</span>
+                            <span>PRO 全部功能</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span style="color: #8b5cf6;">✓</span>
+                            <span>🧠 聊天军师：目标导向策略指导</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span style="color: #8b5cf6;">✓</span>
+                            <span>无限联系人同时监控</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span style="color: #8b5cf6;">✓</span>
+                            <span>群聊智能分析（广告/诈骗识别）</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span style="color: #8b5cf6;">✓</span>
+                            <span>聊天关系图谱 + 关系维护AI</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span style="color: #8b5cf6;">✓</span>
+                            <span>待办事项自动提取 + 智能提醒</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span style="color: #8b5cf6;">✓</span>
+                            <span>使用数据统计 + 效率报告</span>
+                        </li>
+                        <li class="flex items-center space-x-1.5 text-xs text-gray-600">
+                            <span style="color: #8b5cf6;">✓</span>
+                            <span>专属话术市场高级模板</span>
+                        </li>
+                    </ul>
+                    <button class="w-full py-2 text-white rounded-lg text-sm font-medium transition-all shadow-md" style="background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%);">
+                        立即开通 SVIP
+                    </button>
+                    <p class="text-center text-xs mt-2" style="color: #8b5cf6;">🔥 年付立省240元，仅¥39/月</p>
+                </div>
+
+                <button onclick="document.getElementById('pro-upgrade-modal').classList.add('hidden')" class="w-full py-2 text-gray-400 text-sm hover:text-gray-600">
+                    稍后再说
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作成功提示 -->
+    <div id="toast" class="fixed top-14 left-1/2 -translate-x-1/2 px-4 py-2 bg-gray-800 text-white rounded-lg shadow-lg flex items-center space-x-1.5 z-50 hidden text-xs">
+        <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+        </svg>
+        <span id="toast-text">已填入微信输入框，请按回车发送</span>
+    </div>
+
+    <script>
+        const switches = {
+            'auto-dock': true,
+            'auto-paste': true,
+            'clipboard-listener': true,
+            'notification-listener': true,
+            'ui-automation': false
+        };
+
+        function switchFunc(func) {
+            document.querySelectorAll('.func-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('text-gray-600', 'hover:bg-gray-200');
+            });
+            const activeBtn = document.querySelector(`[data-func="${func}"]`);
+            activeBtn.classList.add('active');
+            activeBtn.classList.remove('text-gray-600', 'hover:bg-gray-200');
+
+            document.getElementById('func-reply').classList.add('hidden');
+            document.getElementById('func-coach').classList.add('hidden');
+            document.getElementById('func-polish').classList.add('hidden');
+            document.getElementById('func-contacts').classList.add('hidden');
+            document.getElementById('func-shortcuts').classList.add('hidden');
+            document.getElementById('func-analysis').classList.add('hidden');
+            document.getElementById(`func-${func}`).classList.remove('hidden');
+        }
+
+        function startCoach() {
+            const goal = document.getElementById('chat-goal').value;
+            if (!goal) {
+                showToast('请先选择聊天目标');
+                return;
+            }
+            showToast('聊天军师已启动，正在分析局势...');
+        }
+
+        function selectContact(name) {
+            switchFunc('reply');
+            showToast(`已切换到「${name}」`);
+        }
+
+        function openGroupAnalysis() {
+            if (!isProActivated) {
+                document.getElementById('pro-upgrade-modal').classList.remove('hidden');
+                return;
+            }
+            showToast('群聊分析功能开发中');
+        }
+
+        function showToast(text) {
+            document.getElementById('toast-text').textContent = text;
+            const toast = document.getElementById('toast');
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2000);
+        }
+
+        function copyAndPaste(content) {
+            navigator.clipboard.writeText(content).then(() => {
+                if (switches['auto-paste']) {
+                    showToast('已填入微信输入框，请按回车发送 ✓');
+                } else {
+                    showToast('已复制，请手动粘贴');
+                }
+            });
+        }
+
+        function quickPaste() {
+            switchFunc('reply');
+            showToast('正在生成回复建议...');
+        }
+
+        function clearReplyInput() {
+            document.getElementById('reply-input').value = '';
+        }
+
+        function clearPolishInput() {
+            document.getElementById('polish-input').value = '';
+        }
+
+        function doPolish() {
+            const input = document.getElementById('polish-input').value.trim();
+            if (!input) {
+                showToast('请先输入要润色的内容');
+                return;
+            }
+            showToast('正在润色中...');
+        }
+
+        function toggleSettings() {
+            document.getElementById('settings-modal').classList.toggle('hidden');
+        }
+
+        let todoPanelOpen = false;
+        function toggleTodoPanel() {
+            todoPanelOpen = !todoPanelOpen;
+            const panel = document.getElementById('todo-panel');
+            if (todoPanelOpen) {
+                panel.classList.remove('-translate-y-full');
+            } else {
+                panel.classList.add('-translate-y-full');
+            }
+        }
+
+        function toggleSwitch(id) {
+            switches[id] = !switches[id];
+            const toggle = document.getElementById(`${id}-toggle`);
+            const dot = document.getElementById(`${id}-dot`);
+
+            if (switches[id]) {
+                toggle.classList.remove('bg-gray-300');
+                toggle.classList.add('bg-green-500');
+                dot.style.transform = 'translateX(0)';
+            } else {
+                toggle.classList.remove('bg-green-500');
+                toggle.classList.add('bg-gray-300');
+                dot.style.transform = 'translateX(-20px)';
+            }
+        }
+
+        function toggleSwitchPro(id) {
+            // PRO功能：已付费的可以正常开关，未付费提示升级
+            if (isProActivated) {
+                toggleSwitch(id);
+                // 开启时可以加额外的权限提示（如系统授权）
+                if (switches[id] && id === 'notification-listener') {
+                    showToast('请在系统设置中授权通知读取权限');
+                }
+            } else {
+                document.getElementById('pro-upgrade-modal').classList.remove('hidden');
+            }
+        }
+
+        // 聊天风格相关函数
+        let currentStyle = 'professional';
+        const styleData = {
+            'professional': { name: '标准专业', desc: '正式、礼貌、专业的商务沟通风格，适合客户和同事沟通' },
+            'friendly': { name: '亲切友好', desc: '温暖、亲切、朋友式的轻松语气，适合熟人和朋友沟通' },
+            'concise': { name: '简洁高效', desc: '直截了当、少说废话、高效务实的沟通风格' },
+            'humorous': { name: '幽默风趣', desc: '轻松幽默、善于活跃气氛，让沟通更有趣' }
+        };
+
+        function openStyleSettings() {
+            if (!isProActivated) {
+                document.getElementById('pro-upgrade-modal').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('style-settings-modal').classList.remove('hidden');
+        }
+
+        function closeStyleSettings() {
+            document.getElementById('style-settings-modal').classList.add('hidden');
+        }
+
+        function selectStyle(styleId) {
+            currentStyle = styleId;
+
+            // 更新UI选中状态
+            document.querySelectorAll('.style-card').forEach(card => {
+                card.classList.remove('border-purple-300', 'bg-purple-50');
+                card.classList.add('border-gray-200', 'bg-white');
+            });
+
+            const selectedCard = document.querySelector(`[data-style="${styleId}"]`);
+            if (selectedCard) {
+                selectedCard.classList.remove('border-gray-200', 'bg-white');
+                selectedCard.classList.add('border-purple-300', 'bg-purple-50');
+            }
+
+            // 更新当前风格显示
+            if (styleData[styleId]) {
+                document.getElementById('current-style-name').textContent = styleData[styleId].name;
+                document.getElementById('current-style-desc').textContent = styleData[styleId].desc;
+            }
+
+            showToast(`已切换到${styleData[styleId]?.name || styleId}风格`);
+        }
+
+        function analyzeChatHistory(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // 显示进度条
+            document.getElementById('upload-area').classList.add('hidden');
+            document.getElementById('analysis-progress').classList.remove('hidden');
+
+            // 模拟分析进度
+            let progress = 0;
+            const steps = [
+                '正在读取聊天记录...',
+                '正在提取您的消息...',
+                '正在分析语言特征...',
+                '正在识别常用表达...',
+                '正在构建风格模型...',
+                '即将完成...'
+            ];
+
+            const interval = setInterval(() => {
+                progress += Math.random() * 15 + 5;
+                if (progress > 100) progress = 100;
+
+                document.getElementById('analysis-percent').textContent = Math.round(progress) + '%';
+                document.getElementById('progress-bar').style.width = progress + '%';
+
+                const stepIndex = Math.min(Math.floor((progress / 100) * steps.length), steps.length - 1);
+                document.getElementById('analysis-step').textContent = steps[stepIndex];
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        document.getElementById('analysis-progress').classList.add('hidden');
+                        document.getElementById('analysis-result').classList.remove('hidden');
+                    }, 500);
+                }
+            }, 400);
+        }
+
+        function applyLearnedStyle() {
+            document.getElementById('current-style-name').textContent = '我的专属风格';
+            document.getElementById('current-style-desc').textContent = '基于您的聊天记录学习生成的个性化风格，最像您的说话方式';
+            showToast('已应用您的专属聊天风格！');
+            closeStyleSettings();
+        }
+
+        function updateStyleIntensity(value) {
+            document.getElementById('style-intensity-value').textContent = value + '%';
+        }
+
+        // 智能用户画像相关函数
+        function openUserProfiling() {
+            if (!isProActivated) {
+                document.getElementById('pro-upgrade-modal').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('user-profiling-modal').classList.remove('hidden');
+        }
+
+        function closeUserProfiling() {
+            document.getElementById('user-profiling-modal').classList.add('hidden');
+            // 重置状态
+            document.getElementById('profiling-upload-section').classList.remove('hidden');
+            document.getElementById('profiling-progress').classList.add('hidden');
+            document.getElementById('profiling-result').classList.add('hidden');
+        }
+
+        function analyzeUserProfile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // 显示进度
+            document.getElementById('profiling-upload-section').classList.add('hidden');
+            document.getElementById('profiling-progress').classList.remove('hidden');
+
+            // 模拟深度分析过程
+            let progress = 0;
+            const steps = [
+                '正在提取对话特征...',
+                '正在分析语言模式...',
+                '正在识别兴趣关键词...',
+                '正在构建行为画像...',
+                '正在检测风险因素...',
+                '正在生成最终报告...'
+            ];
+
+            const interval = setInterval(() => {
+                progress += Math.random() * 12 + 5;
+                if (progress > 100) progress = 100;
+
+                document.getElementById('profiling-percent').textContent = Math.round(progress) + '%';
+                document.getElementById('profiling-bar').style.width = progress + '%';
+
+                const stepIndex = Math.min(Math.floor((progress / 100) * steps.length), steps.length - 1);
+                document.getElementById('profiling-step').textContent = steps[stepIndex];
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        document.getElementById('profiling-progress').classList.add('hidden');
+                        document.getElementById('profiling-result').classList.remove('hidden');
+                        showToast('用户画像分析完成！');
+                    }, 800);
+                }
+            }, 500);
+        }
+
+        // 多模态处理相关函数
+        let isAnalyzing = false;
+
+        function triggerFileUpload() {
+            if (!isProActivated) {
+                document.getElementById('pro-upgrade-modal').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('multimodal-upload').click();
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // 判断文件类型
+            const isImage = file.type.startsWith('image/');
+            const isVideo = ['.mp4', '.mov', '.avi', '.mkv'].some(ext => file.name.toLowerCase().endsWith(ext));
+            const isDocument = ['.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx'].some(ext => file.name.toLowerCase().endsWith(ext));
+
+            // 判断是否可能是表情包（文件名包含emoji、sticker、bq等关键词，或尺寸较小）
+            const isLikelySticker = isImage && (
+                file.name.toLowerCase().includes('emoji') ||
+                file.name.toLowerCase().includes('sticker') ||
+                file.name.toLowerCase().includes('bq') ||
+                file.name.toLowerCase().includes('表情') ||
+                file.name.toLowerCase().includes('mmexport') // 微信导出图片前缀
+            );
+
+            let icon = '📄';
+            let statusText = '正在分析内容...';
+
+            if (isLikelySticker) {
+                icon = '😊';
+                statusText = '正在识别表情包含义...';
+            } else if (isImage) {
+                icon = '🖼️';
+                statusText = '正在识别图片内容...';
+            } else if (isVideo) {
+                icon = '🎬';
+                statusText = '正在提取视频内容...';
+            } else if (isDocument) {
+                if (file.name.endsWith('.pdf')) icon = '📕';
+                else if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) icon = '📊';
+                else icon = '📝';
+                statusText = '正在生成文档摘要...';
+            }
+
+            // 显示预览
+            document.getElementById('upload-icon').textContent = icon;
+            document.getElementById('upload-filename').textContent = file.name;
+            document.getElementById('upload-status').textContent = statusText;
+            document.getElementById('upload-preview').classList.remove('hidden');
+            document.getElementById('analysis-result-section').classList.add('hidden');
+            document.getElementById('emoji-analysis').classList.add('hidden');
+
+            isAnalyzing = true;
+
+            // 模拟分析过程
+            setTimeout(() => {
+                let analysisResult = '';
+
+                if (isLikelySticker) {
+                    // 表情包识别场景
+                    const stickerTypes = [
+                        { emoji: '😂', meaning: '大笑、搞笑、觉得很有趣', sentiment: '积极 😊 友好', reply: '哈哈太好笑了！' },
+                        { emoji: '🤔', meaning: '思考、疑惑、需要考虑一下', sentiment: '中性 🤔 考虑中', reply: '我想想看哈~' },
+                        { emoji: '😭', meaning: '感动、难过、笑哭', sentiment: '略带情绪 😢 共情', reply: '我懂这种感觉！' },
+                        { emoji: '👍', meaning: '赞同、认可、觉得不错', sentiment: '积极 👍 肯定', reply: '对吧！我也觉得很好~' },
+                        { emoji: '🥺', meaning: '恳求、卖萌、可怜巴巴', sentiment: '可爱 🥺 示弱', reply: '好好好，都听你的~' },
+                        { emoji: '😡', meaning: '生气、不满、无语', sentiment: '消极 😤 需要安抚', reply: '消消气消消气~' }
+                    ];
+                    const randomSticker = stickerTypes[Math.floor(Math.random() * stickerTypes.length)];
+
+                    document.getElementById('emoji-icon').textContent = randomSticker.emoji;
+                    document.getElementById('emoji-meaning').textContent = `含义：${randomSticker.meaning}`;
+                    document.getElementById('emoji-sentiment').textContent = `情绪：${randomSticker.sentiment}`;
+                    document.getElementById('emoji-analysis').classList.remove('hidden');
+
+                    analysisResult = `表情包识别：对方发送了一张「${randomSticker.meaning}」的表情包。建议回复可以更轻松幽默，配合对方的情绪~`;
+                } else if (isImage) {
+                    analysisResult = '图片内容：这是一张微信聊天截图，对方问"你们这个价格是单人的吗？能几个人用？有没有团队版？" 截图中还显示了之前的价格信息。';
+                } else if (isVideo) {
+                    analysisResult = '视频内容：这是一个15秒的产品演示视频，主要展示了我们软件的核心功能。视频中用户问："这个功能能批量处理吗？大概多久能出结果？"';
+                } else if (isDocument) {
+                    analysisResult = '文档摘要：这是一份客户的需求文档，共3页，主要包含5个核心需求：1. 支持团队协作 2. 数据导出功能 3. API接口 4. 私有化部署 5. 技术支持。客户询问价格和交付周期。';
+                } else {
+                    analysisResult = '文件内容已解析，正在生成回复建议...';
+                }
+
+                document.getElementById('upload-status').textContent = '分析完成 ✓';
+                document.getElementById('upload-status').classList.remove('text-purple-600');
+                document.getElementById('upload-status').classList.add('text-green-600');
+                document.getElementById('analysis-content').textContent = analysisResult;
+                document.getElementById('analysis-result-section').classList.remove('hidden');
+
+                isAnalyzing = false;
+                showToast('内容分析完成，已生成回复建议');
+            }, 2000);
+        }
+
+        function clearUpload() {
+            document.getElementById('multimodal-upload').value = '';
+            document.getElementById('upload-preview').classList.add('hidden');
+            document.getElementById('analysis-result-section').classList.add('hidden');
+            document.getElementById('upload-status').classList.add('text-purple-600');
+            document.getElementById('upload-status').classList.remove('text-green-600');
+            isAnalyzing = false;
+        }
+
+        // 激活相关函数
+        let isProActivated = false;
+
+        function openActivation() {
+            document.getElementById('activation-modal').classList.remove('hidden');
+            switchActivationTab('online');
+        }
+
+        function switchActivationTab(tab) {
+            document.getElementById('tab-online').classList.toggle('text-green-600', tab === 'online');
+            document.getElementById('tab-online').classList.toggle('border-green-500', tab === 'online');
+            document.getElementById('tab-online').classList.toggle('bg-green-50', tab === 'online');
+            document.getElementById('tab-online').classList.toggle('text-gray-500', tab !== 'online');
+            document.getElementById('tab-online').classList.toggle('border-transparent', tab !== 'online');
+
+            document.getElementById('tab-offline').classList.toggle('text-green-600', tab === 'offline');
+            document.getElementById('tab-offline').classList.toggle('border-green-500', tab === 'offline');
+            document.getElementById('tab-offline').classList.toggle('bg-green-50', tab === 'offline');
+            document.getElementById('tab-offline').classList.toggle('text-gray-500', tab !== 'offline');
+            document.getElementById('tab-offline').classList.toggle('border-transparent', tab !== 'offline');
+
+            document.getElementById('activation-online').classList.toggle('hidden', tab !== 'online');
+            document.getElementById('activation-offline').classList.toggle('hidden', tab !== 'offline');
+        }
+
+        function verifyActivation() {
+            const code = document.getElementById('activation-code').value.trim();
+
+            // 验证格式
+            if (!code) {
+                showActivationError('请输入激活码');
+                return;
+            }
+
+            const codePattern = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
+            if (!codePattern.test(code)) {
+                showActivationError('激活码格式不正确');
+                return;
+            }
+
+            // 模拟验证成功
+            setTimeout(() => {
+                showActivationSuccess();
+            }, 1000);
+        }
+
+        function showActivationError(msg) {
+            document.getElementById('activation-online').classList.add('hidden');
+            document.getElementById('activation-offline').classList.add('hidden');
+            document.getElementById('activation-success').classList.add('hidden');
+            document.getElementById('activation-error').classList.remove('hidden');
+            document.getElementById('activation-error-msg').textContent = msg;
+        }
+
+        function showActivationSuccess() {
+            document.getElementById('activation-online').classList.add('hidden');
+            document.getElementById('activation-offline').classList.add('hidden');
+            document.getElementById('activation-error').classList.add('hidden');
+            document.getElementById('activation-success').classList.remove('hidden');
+        }
+
+        function resetActivation() {
+            document.getElementById('activation-error').classList.add('hidden');
+            document.getElementById('activation-online').classList.remove('hidden');
+            document.getElementById('activation-code').value = '';
+            document.getElementById('activation-code').focus();
+        }
+
+        function completeActivation() {
+            isProActivated = true;
+            document.getElementById('activation-modal').classList.add('hidden');
+            document.getElementById('trial-bar').classList.add('hidden');
+            document.getElementById('pro-activated-bar').classList.remove('hidden');
+            showToast('PRO 功能已全部解锁！');
+        }
+
+        function copyHardwareId() {
+            const hwId = document.getElementById('hardware-id').textContent;
+            navigator.clipboard.writeText(hwId).then(() => {
+                showToast('机器码已复制');
+            });
+        }
+
+        function importLicense(event) {
+            const file = event.target.files[0];
+            if (file) {
+                showToast('正在验证授权文件...');
+                setTimeout(() => {
+                    showActivationSuccess();
+                }, 1000);
+            }
+        }
+
+        // 全局快捷键
+        document.addEventListener('keydown', function(e) {
+            if (e.altKey) {
+                if (e.key === 'v' || e.key === 'V') {
+                    e.preventDefault();
+                    quickPaste();
+                }
+                if (e.key === '1') switchFunc('reply');
+                if (e.key === '2') switchFunc('polish');
+            }
+        });
+    </script>
+</body>
+</html>

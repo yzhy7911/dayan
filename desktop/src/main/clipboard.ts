@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, ipcMain } from 'electron'
+import { BrowserWindow, clipboard, ipcMain, IpcMainInvokeEvent } from 'electron'
 
 class ClipboardManager {
   private mainWindow: BrowserWindow | null = null
@@ -30,7 +30,7 @@ class ClipboardManager {
       return this.getText()
     })
 
-    safeHandle('clipboard:setText', (_, text: string) => {
+    safeHandle('clipboard:setText', (_event: IpcMainInvokeEvent, text: string) => {
       return this.setText(text)
     })
 

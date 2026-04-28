@@ -1,10 +1,8 @@
 // 本地存储工具 - 配置文件使用 localStorage，数据使用 Dexie.js (IndexedDB)
-import { 
-  ChatHistoryDB, 
-  KnowledgeDB, 
-  DatabaseInitializer,
-  ChatHistory,
-  KnowledgeItem
+import {
+  ChatHistoryDB,
+  KnowledgeDB,
+  DatabaseInitializer
 } from './database'
 
 const STORAGE_PREFIX = 'dayan_'

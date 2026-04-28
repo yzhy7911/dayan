@@ -19,9 +19,11 @@
     "dayjs": "^1.11.10",
     "dexie": "^4.4.2",
     "electron-store": "^11.0.2",
+    "express": "^5.2.1",
     "lodash-es": "^4.17.21",
     "node-machine-id": "^1.1.12",
     "pinia": "^2.1.7",
+    "tesseract.js": "^5.1.0",
     "vue": "^3.4.19",
     "vue-router": "^4.2.5"
   },
@@ -32,6 +34,7 @@
     "@vitejs/plugin-vue": "^5.0.4",
     "electron": "^28.2.3",
     "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9",
     "eslint": "^8.56.0",
     "eslint-plugin-vue": "^9.21.1",
     "typescript": "~5.3.3",
@@ -41,8 +44,8 @@
     "vue-tsc": "^2.0.0"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "*",
-    "@rollup/rollup-linux-arm64-gnu": "*"
+    "@rollup/rollup-linux-arm64-gnu": "*",
+    "@rollup/rollup-linux-x64-gnu": "*"
   },
   "build": {
     "appId": "com.dayan.app",

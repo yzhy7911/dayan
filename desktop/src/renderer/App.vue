@@ -12,9 +12,12 @@
 import { onMounted } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import TabBar from './components/TabBar.vue'
+import { getTheme, applyTheme } from './utils/theme'
 
 onMounted(() => {
   console.log('[App] ✅ App 组件已挂载')
+  const theme = getTheme()
+  applyTheme(theme)
 })
 </script>
 
@@ -24,7 +27,8 @@ onMounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--bg-secondary);
+  transition: background var(--transition);
 }
 
 .main-content {

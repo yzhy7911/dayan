@@ -5,7 +5,6 @@ import { execSync } from 'child_process'
 class WindowManager {
   private mainWindow: BrowserWindow | null = null
   private isDocked: boolean = false
-  private wechatWindowHandle: string | null = null
   private dockInterval: NodeJS.Timeout | null = null
 
   init(window: BrowserWindow) {

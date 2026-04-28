@@ -1,13 +1,43 @@
 <template>
   <div class="coach-page">
+    <!-- OCR 功能暂隐藏，待后续优化
+    <OCRResultModal ref="ocrModalRef" @import="handleOCRImport" />
+    -->
+
     <div class="top-bar">
       <select v-model="currentGoalId" @change="onGoalChange">
         <option value="">🎯 选择目标</option>
         <option v-for="goal in goals" :key="goal.id" :value="goal.id">{{ goal.name }}</option>
       </select>
-      <button @click="showNewGoalModal = true">➕ 新建</button>
-      <button v-if="currentGoal" @click="openEditGoalModal">✏️ 编辑</button>
-      <button v-if="currentGoal" @click="confirmDeleteGoal">🗑️ 删除</button>
+      <div class="top-bar-actions">
+        <button class="icon-btn" @click="showNewGoalModal = true" title="新建">➕</button>
+        <button v-if="currentGoal" class="icon-btn" @click="openEditGoalModal" title="编辑">✏️</button>
+        <button v-if="currentGoal" class="icon-btn danger" @click="confirmDeleteGoal" title="删除">🗑️</button>
+      </div>
+    </div>
+
+    <!-- 剪贴板监听模式栏 -->
+    <div v-if="currentGoal" class="clipboard-monitor-bar" :class="{ active: isMonitorActive }">
+      <span class="monitor-status">
+        <span class="status-dot"></span>
+        {{ isMonitorActive ? '正在监听剪贴板...' : '剪贴板监听' }}
+      </span>
+      <button class="monitor-toggle-btn" @click="toggleMonitor">
+        {{ isMonitorActive ? '🔴 停止' : '📡 开始' }}
+      </button>
+    </div>
+
+    <!-- 剪贴板监听提示 -->
+    <div v-if="isMonitorActive && lastCopiedText" class="clipboard-toast">
+      <span class="clipboard-preview">{{ lastCopiedText.substring(0, 35) }}{{ lastCopiedText.length > 35 ? '...' : '' }}</span>
+      <div class="clipboard-buttons">
+        <button class="clipboard-add-btn them" @click="addLastCopiedAsThem">
+          对方
+        </button>
+        <button class="clipboard-add-btn me" @click="addLastCopiedAsMe">
+          我
+        </button>
+      </div>
     </div>
 
     <div v-if="currentGoal" class="history-sticky">
@@ -28,9 +58,10 @@
         </div>
       </div>
       <div v-show="showHistory" class="history-body">
-        <div v-for="msg in currentGoal.messages" :key="msg.timestamp" :class="['msg-item', getMsgClass(msg.content)]">
-          <div class="msg-label">{{ getMsgLabel(msg.content) }}</div>
-          <div class="msg-content">{{ msg.content }}</div>
+        <div v-for="msg in currentGoal.messages" :key="msg.timestamp" :class="['msg-wrapper', getMsgWrapperClass(msg.content)]">
+          <div class="msg-bubble">
+            <div class="msg-text">{{ extractMessageContent(msg.content) }}</div>
+          </div>
         </div>
         <div v-if="!currentGoal.messages.length" class="empty">暂无记录</div>
       </div>
@@ -217,11 +248,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { CoachStorage } from '../utils/coach-storage'
+import { useToast } from '../composables/useToast'
+// OCR 功能暂隐藏
+// import OCRResultModal from '../components/OCRResultModal.vue'
 import '../skills/puachat-master.skill'
 import '../skills/top-sales-chat.skill'
 import { getSkillNames, getSkill } from '../skills/skill-loader'
+
+const toast = useToast()
 
 const goals = ref<any[]>([])
 const currentGoalId = ref<number | ''>('')
@@ -243,20 +279,41 @@ const showAnalysisModal = ref(false)
 const isAnalyzingAll = ref(false)
 const overallAnalysis = ref<any>({})
 
+// 剪贴板监听相关
+const isMonitorActive = ref(false)
+const currentSpeaker = ref<'them' | 'me'>('them')
+const lastCopiedText = ref('')
+const lastClipboardCheck = ref('')
+
+// OCR 功能暂隐藏
+// const ocrModalRef = ref<InstanceType<typeof OCRResultModal> | null>(null)
+// function openOCRModal() {
+//   ocrModalRef.value?.open()
+// }
+// async function handleOCRImport(messages: any[]) {
+//   if (!currentGoal.value) {
+//     const goalName = messages[0]?.speaker || '新聊天'
+//     const goalId = await CoachStorage.createGoal(goalName, `从屏幕识别导入的 ${messages.length} 条对话`)
+//     currentGoalId.value = goalId
+//     await onGoalChange()
+//   }
+//   for (const msg of messages) {
+//     await CoachStorage.addMessage(currentGoalId.value, {
+//       role: 'user',
+//       content: `${msg.speaker} 说: ${msg.content}`,
+//       timestamp: Date.now()
+//     })
+//   }
+//   await onGoalChange()
+// }
+
+// 临时修复：直接删除整个 OCR 相关函数，避免语法错误
+const ocrModalRef = ref(null)
+function openOCRModal() {}
+async function handleOCRImport(messages: any[]) {}
+
 const loadSkills = () => {
   availableSkills.value = getSkillNames()
-}
-
-const getMsgClass = (content: string) => {
-  if (content.startsWith('[发送话术')) return 'send'
-  if (content.startsWith('[复制话术')) return 'copy'
-  return 'user'
-}
-
-const getMsgLabel = (content: string) => {
-  if (content.startsWith('[发送话术')) return '🚀 发送'
-  if (content.startsWith('[复制话术')) return '📋 复制'
-  return '💬 ' + (currentGoal.value?.name || '')
 }
 
 const toggleHistory = () => { showHistory.value = !showHistory.value }
@@ -330,7 +387,7 @@ const analyzeAllMessages = async () => {
       }))
 
     if (history.length < 2) {
-      alert('聊天记录太少，无法进行整体分析')
+      toast.error('聊天记录太少，无法进行整体分析')
       isAnalyzingAll.value = false
       return
     }
@@ -338,11 +395,16 @@ const analyzeAllMessages = async () => {
     // 调用 AI 整体分析
     const result = await window.electronAPI?.ai?.analyzeOverall(history, currentGoal.value.goal)
 
+    if (result?.success === false && result?.error) {
+      toast.error('整体分析失败：' + result.error)
+      return
+    }
     if (result) {
       overallAnalysis.value = result
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('整体分析失败:', e)
+    alert('整体分析失败：' + (e.message || '未知错误'))
   } finally {
     isAnalyzingAll.value = false
   }
@@ -363,13 +425,18 @@ const sendMessage = async () => {
       }
     }
     const result = await (window as any).electronAPI?.ai?.analyzeIntent?.(history, goalText)
+    if (result?.success === false && result?.error) {
+      toast.error('分析失败：' + result.error)
+      return
+    }
     if (result?.winRate) {
       latestAnalysis.value = result
       await CoachStorage.addMessage(currentGoal.value.id, { role: 'user', content: userMessage, timestamp: Date.now() })
       currentGoal.value.messages.push({ role: 'user', content: userMessage, timestamp: Date.now() })
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error(e)
+    toast.error('分析失败：' + (e.message || '未知错误'))
   } finally {
     isSending.value = false
   }
@@ -398,7 +465,124 @@ onMounted(async () => {
     currentGoalId.value = goals.value[0].id
     await onGoalChange()
   }
+
+  // 注册剪贴板变化监听
+  window.electronAPI?.clipboard?.onChanged?.(handleClipboardChange)
 })
+
+onUnmounted(() => {
+  // 停止监听
+  if (isMonitorActive.value) {
+    window.electronAPI?.clipboard?.stopListen?.()
+  }
+})
+
+// 剪贴板监听相关方法
+let clipboardPollingInterval: any = null
+
+const toggleMonitor = async () => {
+  if (isMonitorActive.value) {
+    // 停止监听
+    await window.electronAPI?.clipboard?.stopListen?.()
+    isMonitorActive.value = false
+    if (clipboardPollingInterval) {
+      clearInterval(clipboardPollingInterval)
+      clipboardPollingInterval = null
+    }
+    toast.info('已停止剪贴板监听')
+  } else {
+    // 开始监听
+    const started = await window.electronAPI?.clipboard?.startListen?.()
+    if (started) {
+      isMonitorActive.value = true
+      // 开启轮询检查剪贴板变化（备用方案）
+      clipboardPollingInterval = setInterval(checkClipboard, 500)
+      toast.success('剪贴板监听已开启！复制微信内容即可添加')
+    }
+  }
+}
+
+const handleClipboardChange = (text: string) => {
+  if (!isMonitorActive.value || !text.trim()) return
+  if (text === lastClipboardCheck.value) return
+
+  lastClipboardCheck.value = text
+  lastCopiedText.value = text
+}
+
+const checkClipboard = async () => {
+  if (!isMonitorActive.value) return
+
+  try {
+    const text = await window.electronAPI?.clipboard?.getText?.()
+    if (text && text.trim() && text !== lastClipboardCheck.value) {
+      lastClipboardCheck.value = text
+      lastCopiedText.value = text
+    }
+  } catch (e) {
+    console.error('检查剪贴板失败:', e)
+  }
+}
+
+const addLastCopiedAsThem = async () => {
+  if (!lastCopiedText.value || !currentGoal.value) return
+
+  const content = lastCopiedText.value.trim()
+
+  try {
+    await CoachStorage.addMessage(currentGoal.value.id, {
+      role: 'assistant',
+      content: `对方说: ${content}`,
+      timestamp: Date.now()
+    })
+    await onGoalChange()
+    toast.success('已添加为"对方说"')
+    lastCopiedText.value = ''
+  } catch (e) {
+    console.error('添加消息失败:', e)
+    toast.error('添加失败')
+  }
+}
+
+const addLastCopiedAsMe = async () => {
+  if (!lastCopiedText.value || !currentGoal.value) return
+
+  const content = lastCopiedText.value.trim()
+
+  try {
+    await CoachStorage.addMessage(currentGoal.value.id, {
+      role: 'user',
+      content: `我说: ${content}`,
+      timestamp: Date.now()
+    })
+    await onGoalChange()
+    toast.success('已添加为"我说"')
+    lastCopiedText.value = ''
+  } catch (e) {
+    console.error('添加消息失败:', e)
+    toast.error('添加失败')
+  }
+}
+
+// 更新消息标签显示逻辑
+const getMsgClass = (content: string) => {
+  if (content.startsWith('[发送话术')) return 'send'
+  if (content.startsWith('[复制话术')) return 'copy'
+  if (content.startsWith('对方说:')) return 'them'
+  if (content.startsWith('我说:')) return 'me'
+  return 'user'
+}
+
+const getMsgWrapperClass = (content: string) => {
+  if (content.startsWith('我说:')) return 'me'
+  return 'them'
+}
+
+const extractMessageContent = (content: string) => {
+  if (content.startsWith('对方说:')) return content.replace('对方说:', '')
+  if (content.startsWith('我说:')) return content.replace('我说:', '')
+  return content
+}
 </script>
 
 <style scoped>
@@ -413,8 +597,8 @@ onMounted(async () => {
 /* 顶部导航栏 */
 .top-bar {
   display: flex;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-light);
   align-items: center;
@@ -425,7 +609,7 @@ onMounted(async () => {
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  font-size: var(--font-md);
+  font-size: var(--font-sm);
   background: var(--bg-secondary);
   color: var(--text-primary);
   outline: none;
@@ -438,21 +622,40 @@ onMounted(async () => {
   box-shadow: 0 0 0 3px var(--primary-bg);
 }
 
-.top-bar button {
-  padding: var(--space-2) var(--space-3);
+.top-bar-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.top-bar .icon-btn {
+  padding: var(--space-1) var(--space-2);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  font-size: var(--font-sm);
-  font-weight: 500;
+  font-size: var(--font-md);
   transition: all var(--transition);
 }
 
-.top-bar button:hover {
+.top-bar .icon-btn:hover {
   background: var(--border-color);
   color: var(--text-primary);
+}
+
+.top-bar .icon-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.top-bar .ocr-btn {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  color: white;
+}
+
+.top-bar .ocr-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 /* 技能选择器 - 移到内容区顶部 */
@@ -552,51 +755,67 @@ onMounted(async () => {
 }
 
 .history-body {
-  max-height: 120px;
+  max-height: 150px;
   overflow-y: auto;
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
-.msg-item {
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  margin-bottom: var(--space-1);
-  transition: all var(--transition);
+.msg-wrapper {
+  display: flex;
+  width: 100%;
 }
 
-.msg-item:hover {
-  transform: translateX(2px);
+.msg-wrapper.them {
+  justify-content: flex-start;
 }
 
-.msg-item.user {
-  background: var(--info-bg);
-  border-left: 2px solid var(--info);
+.msg-wrapper.me {
+  justify-content: flex-end;
 }
 
-.msg-item.send {
-  background: var(--success-bg);
-  border-left: 2px solid var(--success);
+.msg-bubble {
+  max-width: 75%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 12px;
+  font-size: var(--font-sm);
+  line-height: 1.5;
+  position: relative;
+  word-break: break-word;
+  transition: background var(--transition), color var(--transition);
 }
 
-.msg-item.copy {
-  background: var(--secondary-bg);
-  border-left: 2px solid var(--secondary);
+.msg-wrapper.them .msg-bubble {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-bottom-left-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-.msg-label {
-  font-size: 10px;
+.msg-wrapper.me .msg-bubble {
+  background: linear-gradient(135deg, #95ec69 0%, #7ed356 100%);
+  color: #000;
+  border-bottom-right-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* 暗色模式下调整我的消息气泡 */
+.dark-theme .msg-wrapper.me .msg-bubble {
+  background: linear-gradient(135deg, #7ed356 0%, #5caf30 100%);
+  color: #000;
+}
+
+.msg-text {
+  white-space: pre-wrap;
+}
+
+.empty {
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 1px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.msg-content {
-  font-size: var(--font-xs);
-  color: var(--text-primary);
-  line-height: 1.4;
+  text-align: center;
+  padding: var(--space-4);
 }
 
 /* 内容区域 */
@@ -1273,5 +1492,119 @@ onMounted(async () => {
 
 .suggestion-list li {
   color: var(--info);
+}
+
+/* 剪贴板监听栏 */
+.clipboard-monitor-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-1) var(--space-4);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-light);
+  gap: var(--space-2);
+}
+
+.clipboard-monitor-bar.active {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+  border-bottom: 1px solid var(--warning);
+}
+
+.monitor-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.clipboard-monitor-bar.active .status-dot {
+  background: var(--warning);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+.monitor-toggle-btn {
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.monitor-toggle-btn:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.clipboard-monitor-bar.active .monitor-toggle-btn {
+  background: var(--error);
+  color: white;
+}
+
+/* 剪贴板提示条 */
+.clipboard-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.03) 100%);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.clipboard-preview {
+  flex: 1;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clipboard-buttons {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.clipboard-add-btn {
+  padding: var(--space-1) var(--space-2);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  min-width: 40px;
+  text-align: center;
+}
+
+.clipboard-add-btn.them {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.clipboard-add-btn.me {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.clipboard-add-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 </style>
