@@ -17,8 +17,8 @@ class HistoryDatabase extends Dexie {
   constructor() {
     super('history-db')
 
-    this.version(1).stores({
-      replyHistory: '++id, isFavorite, createdAt, updatedAt'
+    this.version(2).stores({
+      replyHistory: '++id, createdAt, updatedAt'
     })
   }
 }
@@ -51,7 +51,8 @@ export class HistoryStorage {
   }
 
   static async getFavorites(limit: number = 50): Promise<ReplyHistory[]> {
-    const allFavorites = await historyDB.replyHistory.where('isFavorite').equals(true).toArray()
+    const allHistory = await historyDB.replyHistory.toArray()
+    const allFavorites = allHistory.filter(h => h.isFavorite)
     allFavorites.sort((a, b) => b.createdAt - a.createdAt)
     return allFavorites.slice(0, limit)
   }
@@ -87,11 +88,26 @@ export class HistoryStorage {
 
   static async init(): Promise<void> {
     try {
+      // 如果有旧版本数据库，先删除它
+      const oldDBs = await indexedDB.databases()
+      if (oldDBs.some(db => db.name === 'history-db' && (db.version || 1) < 2)) {
+        console.log('[HistoryDB] 检测到旧版本数据库，正在删除...')
+        indexedDB.deleteDatabase('history-db')
+      }
+
       await historyDB.open()
       console.log('[HistoryDB] ✅ 历史记录数据库初始化成功')
     } catch (error) {
       console.error('[HistoryDB] ❌ 数据库初始化失败:', error)
-      throw error
+      // 如果打开失败，尝试删除后重新打开
+      try {
+        indexedDB.deleteDatabase('history-db')
+        await historyDB.open()
+        console.log('[HistoryDB] ✅ 数据库重置后初始化成功')
+      } catch (retryError) {
+        console.error('[HistoryDB] ❌ 数据库重置后仍然失败:', retryError)
+        throw retryError
+      }
     }
   }
 }

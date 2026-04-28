@@ -21,14 +21,14 @@ const emojiMappings: EmojiMapping = {
   // 积极情绪
   '😊': { emotion: '开心', keywords: ['开心', '高兴', '愉快'], style: 'friendly' },
   '😄': { emotion: '开心', keywords: ['开心', '大笑', '快乐'], style: 'friendly' },
-  '🥰': { emotion: '喜欢', keywords: ['喜欢', '爱', '可爱'], style: 'warm' },
-  '😍': { emotion: '喜爱', keywords: ['喜爱', '喜欢', '爱'], style: 'warm' },
-  '🤗': { emotion: '拥抱', keywords: ['拥抱', '友好', '温暖'], style: 'warm' },
+  '🥰': { emotion: '喜欢', keywords: ['喜欢', '爱', '可爱'], style: 'empathetic' },
+  '😍': { emotion: '喜爱', keywords: ['喜爱', '喜欢', '爱'], style: 'empathetic' },
+  '🤗': { emotion: '拥抱', keywords: ['拥抱', '友好', '温暖'], style: 'empathetic' },
   '👍': { emotion: '赞同', keywords: ['赞同', '好的', '支持'], style: 'friendly' },
   '🎉': { emotion: '庆祝', keywords: ['庆祝', '恭喜', '高兴'], style: 'friendly' },
   '🎊': { emotion: '庆祝', keywords: ['庆祝', '恭喜', '快乐'], style: 'friendly' },
   '👏': { emotion: '赞赏', keywords: ['赞赏', '厉害', '好棒'], style: 'friendly' },
-  '💕': { emotion: '喜欢', keywords: ['喜欢', '爱', '心'], style: 'warm' },
+  '💕': { emotion: '喜欢', keywords: ['喜欢', '爱', '心'], style: 'empathetic' },
 
   // 中性情绪
   '🙂': { emotion: '平静', keywords: ['平静', '还好', '一般'], style: 'friendly' },
@@ -57,21 +57,34 @@ export class EmotionDetector {
    * 从文本中检测情绪
    */
   static detectFromText(text: string): EmotionResult | null {
-    // 检查文本中的表情
-    const emojis = text.match(/[\p{Emoji_Presentation}\p{Emoji}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Flag_Sequence}\p{Emoji_Keycap_Sequence}\p{Emoji_Tag_Sequence}\p{Emoji_ZWJ_Sequence}]/gu);
+    // 检查文本中是否包含我们支持的表情
+    const foundEmojis: string[] = [];
 
-    if (!emojis || emojis.length === 0) {
+    for (const emoji of Object.keys(emojiMappings)) {
+      if (text.includes(emoji)) {
+        // 统计这个表情出现的次数
+        const regex = new RegExp(emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        const matches = text.match(regex);
+        if (matches) {
+          for (let i = 0; i < matches.length; i++) {
+            foundEmojis.push(emoji);
+          }
+        }
+      }
+    }
+
+    if (foundEmojis.length === 0) {
       return null;
     }
 
     // 分析最频繁出现的表情
     const emojiCount = new Map<string, number>();
-    for (const emoji of emojis) {
+    for (const emoji of foundEmojis) {
       emojiCount.set(emoji, (emojiCount.get(emoji) || 0) + 1);
     }
 
     // 找出出现最多的表情
-    let mostFrequentEmoji = emojis[0];
+    let mostFrequentEmoji = foundEmojis[0];
     let maxCount = 0;
 
     for (const [emoji, count] of emojiCount.entries()) {
