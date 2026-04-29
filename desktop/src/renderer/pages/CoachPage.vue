@@ -31,10 +31,13 @@
     <div v-if="isMonitorActive && lastCopiedText" class="clipboard-toast">
       <span class="clipboard-preview">{{ lastCopiedText.substring(0, 35) }}{{ lastCopiedText.length > 35 ? '...' : '' }}</span>
       <div class="clipboard-buttons">
-        <button class="clipboard-add-btn them" @click="addLastCopiedAsThem">
+        <button v-if="lastCopiedChats.length" class="clipboard-add-btn them" @click="importLastCopiedChats">
+          导入
+        </button>
+        <button v-if="!lastCopiedChats.length" class="clipboard-add-btn them" @click="addLastCopiedAsThem">
           对方
         </button>
-        <button class="clipboard-add-btn me" @click="addLastCopiedAsMe">
+        <button v-if="!lastCopiedChats.length" class="clipboard-add-btn me" @click="addLastCopiedAsMe">
           我
         </button>
       </div>
@@ -249,6 +252,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { CoachStorage } from '../utils/coach-storage'
 import { useToast } from '../composables/useToast'
 // OCR 功能暂隐藏
@@ -284,6 +288,32 @@ const isMonitorActive = ref(false)
 const currentSpeaker = ref<'them' | 'me'>('them')
 const lastCopiedText = ref('')
 const lastClipboardCheck = ref('')
+const lastClipboardImageCheck = ref('')
+const isCheckingClipboardImage = ref(false)
+const lastCopiedChats = ref<ChatItem[]>([])
+
+interface ChatItem {
+  text: string
+  isMe: boolean
+}
+
+interface OCRLine {
+  text: string
+  confidence?: number
+  box?: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+}
+
+interface ConversationBounds {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
 
 // OCR 功能暂隐藏
 // const ocrModalRef = ref<InstanceType<typeof OCRResultModal> | null>(null)
@@ -472,23 +502,38 @@ onMounted(async () => {
 
 onUnmounted(() => {
   // 停止监听
-  if (isMonitorActive.value) {
-    window.electronAPI?.clipboard?.stopListen?.()
-  }
+  stopMonitor()
+})
+
+onBeforeRouteLeave(() => {
+  stopMonitor()
 })
 
 // 剪贴板监听相关方法
 let clipboardPollingInterval: any = null
 
-const toggleMonitor = async () => {
-  if (isMonitorActive.value) {
-    // 停止监听
+const stopMonitor = async () => {
+  if (!isMonitorActive.value && !clipboardPollingInterval) return
+
+  try {
     await window.electronAPI?.clipboard?.stopListen?.()
+  } catch (e) {
+    console.error('停止剪贴板监听失败:', e)
+  } finally {
     isMonitorActive.value = false
     if (clipboardPollingInterval) {
       clearInterval(clipboardPollingInterval)
       clipboardPollingInterval = null
     }
+    lastClipboardImageCheck.value = ''
+    lastCopiedChats.value = []
+  }
+}
+
+const toggleMonitor = async () => {
+  if (isMonitorActive.value) {
+    // 停止监听
+    await stopMonitor()
     toast.info('已停止剪贴板监听')
   } else {
     // 开始监听
@@ -508,19 +553,97 @@ const handleClipboardChange = (text: string) => {
 
   lastClipboardCheck.value = text
   lastCopiedText.value = text
+  lastCopiedChats.value = []
 }
 
 const checkClipboard = async () => {
   if (!isMonitorActive.value) return
 
   try {
+    const hasImage = await window.electronAPI?.clipboard?.hasImage?.()
+    if (hasImage && !isCheckingClipboardImage.value) {
+      const imageData = await window.electronAPI?.clipboard?.getImage?.()
+      const imageKey = getImageClipboardKey(imageData)
+      if (imageData && imageKey && imageKey !== lastClipboardImageCheck.value) {
+        lastClipboardImageCheck.value = imageKey
+        await handleClipboardImage(imageData)
+        return
+      }
+    }
+
     const text = await window.electronAPI?.clipboard?.getText?.()
     if (text && text.trim() && text !== lastClipboardCheck.value) {
       lastClipboardCheck.value = text
       lastCopiedText.value = text
+      lastCopiedChats.value = []
     }
   } catch (e) {
     console.error('检查剪贴板失败:', e)
+  }
+}
+
+const getImageClipboardKey = (imageData?: string | null): string => {
+  if (!imageData) return ''
+  return `${imageData.length}:${imageData.slice(0, 80)}:${imageData.slice(-80)}`
+}
+
+const handleClipboardImage = async (imageData: string) => {
+  if (!isMonitorActive.value) return
+
+  isCheckingClipboardImage.value = true
+  try {
+    const result = await window.electronAPI?.ocr?.recognize?.(imageData)
+    if (!result?.success || !result.text.trim()) {
+      toast.info('图片里没有识别到可导入的聊天内容')
+      return
+    }
+
+    const chats = parseChatFromOCR(
+      result.lines || [],
+      { width: result.width || 0, height: result.height || 0 },
+      result.text
+    )
+
+    if (chats.length > 0) {
+      lastCopiedChats.value = chats
+      lastCopiedText.value = `已识别 ${chats.length} 条图片对话`
+      lastClipboardCheck.value = lastCopiedText.value
+      toast.success(`已识别 ${chats.length} 条图片对话，点击导入`)
+    } else {
+      const cleaned = cleanOCRText(result.text)
+      if (cleaned) {
+        lastCopiedChats.value = []
+        lastCopiedText.value = cleaned
+        lastClipboardCheck.value = cleaned
+        toast.info('已识别图片文字，请选择归属')
+      }
+    }
+  } catch (e) {
+    console.error('图片剪贴板识别失败:', e)
+    toast.error('图片识别失败')
+  } finally {
+    isCheckingClipboardImage.value = false
+  }
+}
+
+const importLastCopiedChats = async () => {
+  if (!lastCopiedChats.value.length || !currentGoal.value) return
+
+  try {
+    for (const chat of lastCopiedChats.value) {
+      await CoachStorage.addMessage(currentGoal.value.id, {
+        role: chat.isMe ? 'user' : 'assistant',
+        content: `${chat.isMe ? '我说' : '对方说'}: ${chat.text}`,
+        timestamp: Date.now()
+      })
+    }
+    await onGoalChange()
+    toast.success(`已导入 ${lastCopiedChats.value.length} 条对话`)
+    lastCopiedText.value = ''
+    lastCopiedChats.value = []
+  } catch (e) {
+    console.error('导入图片对话失败:', e)
+    toast.error('导入失败')
   }
 }
 
@@ -538,6 +661,7 @@ const addLastCopiedAsThem = async () => {
     await onGoalChange()
     toast.success('已添加为"对方说"')
     lastCopiedText.value = ''
+    lastCopiedChats.value = []
   } catch (e) {
     console.error('添加消息失败:', e)
     toast.error('添加失败')
@@ -558,6 +682,7 @@ const addLastCopiedAsMe = async () => {
     await onGoalChange()
     toast.success('已添加为"我说"')
     lastCopiedText.value = ''
+    lastCopiedChats.value = []
   } catch (e) {
     console.error('添加消息失败:', e)
     toast.error('添加失败')
@@ -582,6 +707,196 @@ const extractMessageContent = (content: string) => {
   if (content.startsWith('对方说:')) return content.replace('对方说:', '')
   if (content.startsWith('我说:')) return content.replace('我说:', '')
   return content
+}
+
+const parseChatFromOCR = (lines: OCRLine[], size: { width: number; height: number }, fallbackText: string): ChatItem[] => {
+  if (!lines.length || !size.width) {
+    return cleanOCRText(fallbackText)
+      .split('\n')
+      .filter(Boolean)
+      .map(text => ({ text, isMe: false }))
+  }
+
+  const bounds = detectConversationBounds(lines, size)
+  const usableLines = lines
+    .filter(line => line.text && !isNoiseOCRLine(line.text))
+    .filter(line => {
+      if (!line.box || !size.height) return false
+      const yCenter = line.box.y + line.box.height / 2
+      const xCenter = line.box.x + line.box.width / 2
+      return xCenter >= bounds.left &&
+        xCenter <= bounds.right &&
+        yCenter >= bounds.top &&
+        yCenter <= bounds.bottom
+    })
+    .sort((a, b) => {
+      const ay = a.box?.y ?? 0
+      const by = b.box?.y ?? 0
+      if (Math.abs(ay - by) > 10) return ay - by
+      return (a.box?.x ?? 0) - (b.box?.x ?? 0)
+    })
+
+  const chats: ChatItem[] = []
+  let current: ChatItem | null = null
+  let currentBottom = -Infinity
+
+  for (const line of usableLines) {
+    const text = normalizeChatText(line.text)
+    if (!text) continue
+
+    const box = line.box
+    const centerX = box ? box.x + box.width / 2 : (bounds.left + bounds.right) / 2
+    const isMe = centerX > bounds.left + (bounds.right - bounds.left) * 0.56
+    const bottom = box ? box.y + box.height : currentBottom
+    const lineHeight = box?.height || 24
+    const shouldMerge = current && current.isMe === isMe && box && box.y - currentBottom < lineHeight * 1.25
+
+    if (shouldMerge && current) {
+      current.text = `${current.text}\n${text}`
+    } else {
+      current = { text, isMe }
+      chats.push(current)
+    }
+
+    currentBottom = Math.max(currentBottom, bottom)
+  }
+
+  return mergeShortOCRFragments(chats)
+}
+
+const detectConversationBounds = (lines: OCRLine[], size: { width: number; height: number }): ConversationBounds => {
+  const width = size.width || 1
+  const height = size.height || 1
+  const aspectRatio = width / height
+  const hasDesktopSidebar = aspectRatio > 1.15
+  const left = hasDesktopSidebar ? detectDesktopChatLeft(lines, width, height) : 0
+  const top = detectChatTop(lines, height)
+  const bottom = detectChatBottom(lines, height, top)
+
+  return { left, right: width, top, bottom }
+}
+
+const detectDesktopChatLeft = (lines: OCRLine[], width: number, height: number): number => {
+  const rightSideLines = lines
+    .filter(line => line.box && line.box.y > height * 0.06 && line.box.y < height * 0.92)
+    .filter(line => !isNoiseOCRLine(line.text))
+    .map(line => line.box!.x)
+    .filter(x => x > width * 0.22)
+    .sort((a, b) => a - b)
+
+  if (rightSideLines.length >= 2) {
+    return Math.max(width * 0.26, Math.min(width * 0.48, rightSideLines[0] - width * 0.04))
+  }
+
+  return width * 0.30
+}
+
+const detectChatTop = (lines: OCRLine[], height: number): number => {
+  const titleBottom = lines
+    .filter(line => line.box && isHeaderOCRLine(line.text))
+    .map(line => line.box!.y + line.box!.height)
+    .sort((a, b) => b - a)[0]
+
+  if (titleBottom && titleBottom < height * 0.24) {
+    return titleBottom + height * 0.025
+  }
+
+  return height * 0.08
+}
+
+const detectChatBottom = (lines: OCRLine[], height: number, top: number): number => {
+  const inputTop = lines
+    .filter(line => line.box && line.box.y > Math.max(top, height * 0.45))
+    .filter(line => isInputAreaOCRLine(line.text))
+    .map(line => line.box!.y)
+    .sort((a, b) => a - b)[0]
+
+  if (inputTop) {
+    return Math.max(top, inputTop - height * 0.025)
+  }
+
+  return height * 0.92
+}
+
+const normalizeChatText = (text: string): string => {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/^[·•。,\s]+/, '')
+    .replace(/[|｜]+/g, '')
+    .trim()
+}
+
+const cleanOCRText = (text: string): string => {
+  return text
+    .split('\n')
+    .map(normalizeChatText)
+    .filter(line => line && !isNoiseOCRLine(line))
+    .join('\n')
+}
+
+const isNoiseOCRLine = (text: string): boolean => {
+  const clean = normalizeChatText(text)
+  if (!clean) return true
+  if (isVoiceDurationOCRLine(clean)) return true
+  if (isMediaPlaceholderOCRLine(clean)) return true
+  if (/^\d{1,2}:\d{2}$/.test(clean)) return true
+  if (/^(微信|通讯录|发现|我|聊天信息|发送|按住说话|\+|返回|更多|语音|表情|文件传输助手)$/.test(clean)) return true
+  if (/^(今天|昨天|周[一二三四五六日天]|星期[一二三四五六日天])\s*\d{1,2}:\d{2}$/.test(clean)) return true
+  if (clean.length <= 1 && !/[\u4e00-\u9fa5a-zA-Z0-9]/.test(clean)) return true
+  return false
+}
+
+const isVoiceDurationOCRLine = (text: string): boolean => {
+  const clean = text
+    .replace(/[（）()\[\]【】]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’′]/g, "'")
+    .replace(/″/g, '"')
+    .trim()
+
+  return /^\d{1,3}["']+$/.test(clean) ||
+    /^\d{1,2}'\d{1,2}"?$/.test(clean) ||
+    /^\d{1,3}(秒|s|S)$/.test(clean)
+}
+
+const isMediaPlaceholderOCRLine = (text: string): boolean => {
+  const clean = text
+    .replace(/[（）()\[\]【】]/g, '')
+    .replace(/\s+/g, '')
+    .trim()
+
+  return /^(图片|视频|照片|相册|文件|表情|位置|名片|链接|小程序|语音消息|视频消息)$/.test(clean) ||
+    /^(收到|发送)?(一张|1张|一个|1个)?(图片|视频|照片|文件|表情|位置|名片|链接|小程序)$/.test(clean)
+}
+
+const isHeaderOCRLine = (text: string): boolean => {
+  const clean = normalizeChatText(text)
+  return /^(微信|WeChat|聊天信息|返回|更多|搜索|\d+)$/.test(clean)
+}
+
+const isInputAreaOCRLine = (text: string): boolean => {
+  const clean = normalizeChatText(text)
+  return /^(发送|按住说话|输入|语音|表情|\+|聊天信息)$/.test(clean) ||
+    /^(发送消息|请输入|输入消息|说点什么)/.test(clean)
+}
+
+const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
+  const merged: ChatItem[] = []
+
+  for (const chat of chats) {
+    const previous = merged[merged.length - 1]
+    if (previous && previous.isMe === chat.isMe && chat.text.length <= 4) {
+      previous.text = `${previous.text}\n${chat.text}`
+    } else {
+      merged.push({ ...chat })
+    }
+  }
+
+  return merged.filter(chat => {
+    const text = normalizeChatText(chat.text)
+    return text && !isVoiceDurationOCRLine(text) && !isMediaPlaceholderOCRLine(text)
+  })
 }
 </script>
 

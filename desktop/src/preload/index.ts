@@ -36,7 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   ai: {
-    generateReply: (context: string, style: string) => ipcRenderer.invoke('ai:generateReply', context, style),
+    generateReply: (context: string, style: string, imageData?: string) => ipcRenderer.invoke('ai:generateReply', context, style, imageData),
     polishText: (text: string, style: string) => ipcRenderer.invoke('ai:polishText', text, style),
     analyzeIntent: (chatHistory: any[], goal?: string) => ipcRenderer.invoke('ai:analyzeIntent', chatHistory, goal),
     analyzeOverall: (chatHistory: any[], goal?: string) => ipcRenderer.invoke('ai:analyzeOverall', chatHistory, goal),
@@ -85,7 +85,18 @@ declare global {
       ocr: {
         hasImage: () => Promise<boolean>
         getImage: () => Promise<string | null>
-        recognize: (imageData?: string) => Promise<{ success: boolean; text: string; error?: string }>
+        recognize: (imageData?: string) => Promise<{
+          success: boolean
+          text: string
+          lines?: {
+            text: string
+            confidence?: number
+            box?: { x: number; y: number; width: number; height: number }
+          }[]
+          width?: number
+          height?: number
+          error?: string
+        }>
       }
       license: {
         verify: (key: string) => Promise<any>
@@ -93,7 +104,7 @@ declare global {
         isActivated: () => Promise<boolean>
       }
       ai: {
-        generateReply: (context: string, style: string) => Promise<{ style: string; reply: string }[]>
+        generateReply: (context: string, style: string, imageData?: string) => Promise<{ style: string; reply: string }[]>
         polishText: (text: string, style: string) => Promise<string[]>
         analyzeIntent: (chatHistory: any[], goal?: string) => Promise<any>
         testConnection: () => Promise<{ success: boolean; model?: string; error?: string }>

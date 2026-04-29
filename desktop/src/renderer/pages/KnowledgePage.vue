@@ -1048,8 +1048,11 @@ const exportKnowledge = () => {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  flex: 0 0 auto;
-  width: auto;
+  flex: 0 0 auto !important;
+  flex-grow: 0 !important;
+  flex-shrink: 0 !important;
+  width: fit-content;
+  max-width: 132px;
   min-width: 0;
   min-height: 32px;
   height: 32px;
@@ -1072,9 +1075,12 @@ const exportKnowledge = () => {
 }
 
 .card-copy-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 14px !important;
+  height: 14px !important;
+  max-width: 14px;
+  max-height: 14px;
   flex-shrink: 0;
+  display: block;
 }
 
 .icon-action {
@@ -1444,7 +1450,9 @@ const exportKnowledge = () => {
 
   .card-copy-btn {
     flex: 0 0 auto;
-    width: auto;
+    flex-grow: 0;
+    width: fit-content;
+    max-width: 132px;
   }
 }
 </style>

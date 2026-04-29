@@ -3,7 +3,7 @@
     <section class="hero-panel surface-panel">
       <div class="hero-copy">
         <p class="hero-eyebrow">Reply Studio</p>
-        <h1 class="hero-title">难回的话，整理成可发送版本。</h1>
+        <h1 class="hero-title">把犹豫的瞬间，变成能直接发出的下一句。</h1>
       </div>
       <div class="hero-metrics">
         <div class="metric-tile">
@@ -42,32 +42,51 @@
         <button class="remove-image-btn" @click="removeImage">×</button>
       </div>
 
+      <div v-if="isParsingImage" class="parse-status">
+        正在从图片里提取聊天对话...
+      </div>
+
       <div v-if="parsedChats.length > 0" class="chat-parse-result">
         <div class="parse-header">
           <span class="parse-title">已解析的聊天记录</span>
-          <button class="btn-refresh" @click="parseChatHistory">🔄 重新解析</button>
+          <button class="btn-refresh" @click="parseChatHistory">重新解析</button>
         </div>
         <div class="chat-list">
           <div
             v-for="(chat, index) in parsedChats"
             :key="index"
-            :class="['chat-item', chat.isMe ? 'me' : 'other']"
+            :class="['chat-item', chat.isMe ? 'me' : 'other', { target: selectedTargetIndex === index }]"
           >
-            <span class="chat-avatar">{{ chat.isMe ? '我' : '对方' }}</span>
+            <button class="chat-avatar" @click="toggleChatSpeaker(index)">{{ chat.isMe ? '我' : '对方' }}</button>
             <div class="chat-content">
-              <p>{{ chat.text }}</p>
+              <textarea
+                v-model="chat.text"
+                class="chat-edit"
+                rows="2"
+              ></textarea>
+              <div class="chat-tools">
+                <button class="chat-tool-btn" :class="{ active: selectedTargetIndex === index }" @click="selectReplyTarget(index)">
+                  回复这句
+                </button>
+                <button class="chat-tool-btn" @click="removeParsedChat(index)">删除</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <textarea
-        v-model="inputText"
-        class="input-textarea"
-        placeholder="粘贴聊天内容，或描述当前局面..."
-        rows="5"
-        @paste="handlePaste"
-      ></textarea>
+      <div class="textarea-wrap">
+        <textarea
+          v-model="inputText"
+          class="input-textarea"
+          :placeholder="parsedChats.length > 0 ? '可补充当前局面、你的想法或想达到的效果...' : '粘贴聊天内容，或描述当前局面...'"
+          rows="5"
+          @paste="handlePaste"
+        ></textarea>
+        <button v-if="inputText" class="clear-text-btn" @click="clearInputText">
+          清空
+        </button>
+      </div>
 
       <div v-if="detectedEmotion" class="signal-row emotion-row">
         <div class="signal-copy">
@@ -100,9 +119,24 @@
         </div>
       </div>
 
+      <div class="intent-selector">
+        <span class="style-label">回复目标</span>
+        <div class="style-buttons">
+          <button
+            v-for="intent in replyIntents"
+            :key="intent.value"
+            class="style-btn intent-btn"
+            :class="{ active: selectedIntent === intent.value }"
+            @click="selectedIntent = intent.value"
+          >
+            {{ intent.label }}
+          </button>
+        </div>
+      </div>
+
       <button
         class="generate-btn"
-        :disabled="!inputText.trim() && !pastedImage || isGenerating"
+        :disabled="!canGenerate || isGenerating"
         @click="generateReply"
       >
         <span v-if="isGenerating">正在生成回复…</span>
@@ -133,6 +167,9 @@
           </div>
           <div class="reply-content">{{ reply.reply }}</div>
           <div class="reply-actions">
+            <button class="btn-copy" :disabled="isRerollingIndex === index" @click="rerollReply(index)">
+              {{ isRerollingIndex === index ? '生成中' : '换一句' }}
+            </button>
             <button class="btn-copy" @click="copyReply(reply.reply)">
               复制
             </button>
@@ -160,13 +197,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onActivated, onDeactivated, onMounted, onUnmounted, watch } from 'vue'
 
 // 组件名称，用于 keep-alive 缓存
 defineOptions({ name: 'Reply' })
 import { useRouter } from 'vue-router'
 import { hasAPIKey } from '../utils/storage'
-import { HistoryStorage } from '../utils/history-storage'
 import { EmotionDetector } from '../utils/emotion-detector'
 import { StyleLearner } from '../utils/style-learning'
 import { ScamDetector } from '../utils/ScamDetector'
@@ -178,13 +214,37 @@ const inputText = ref('')
 const selectedStyle = ref('all')
 const isGenerating = ref(false)
 const replies = ref<{ style: string; reply: string }[]>([])
+const isRerollingIndex = ref<number | null>(null)
 const isListening = ref(false)
 const pastedImage = ref<string | null>(null)
+const isParsingImage = ref(false)
+const lastOCRText = ref('')
+const lastOCRLines = ref<OCRLine[]>([])
+const lastOCRSize = ref({ width: 0, height: 0 })
+const selectedTargetIndex = ref<number | null>(null)
+const selectedIntent = ref('natural')
+const canGenerate = computed(() => parsedChats.value.length > 0 || inputText.value.trim() || pastedImage.value)
 
 // 聊天记录解析相关
 interface ChatItem {
   text: string
   isMe: boolean
+}
+interface OCRLine {
+  text: string
+  confidence?: number
+  box?: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+}
+interface ConversationBounds {
+  left: number
+  right: number
+  top: number
+  bottom: number
 }
 const parsedChats = ref<ChatItem[]>([])
 
@@ -204,6 +264,19 @@ const styles = [
   { value: 'concise', label: '简洁' },
   { value: 'empathetic', label: '共情' }
 ]
+
+const replyIntents = [
+  { value: 'natural', label: '自然接话' },
+  { value: 'comfort', label: '安抚' },
+  { value: 'explain', label: '解释' },
+  { value: 'decline', label: '拒绝' },
+  { value: 'advance', label: '推进' },
+  { value: 'end', label: '收尾' }
+]
+
+const getIntentLabel = (intent: string): string => {
+  return replyIntents.find(item => item.value === intent)?.label || '自然接话'
+}
 
 const getStyleLabel = (style: string): string => {
   const styleMap: Record<string, string> = {
@@ -233,6 +306,10 @@ onMounted(() => {
       handleClipboardChange(text)
     }
   })
+})
+
+onActivated(() => {
+  console.log('[Reply] 页面已激活')
 })
 
 // 监听输入文本变化，检测情绪和诈骗
@@ -280,16 +357,29 @@ const applyEmotionStyle = () => {
 
 onUnmounted(() => {
   // 页面卸载时停止监听
-  if (isListening.value) {
-    window.electronAPI?.clipboard?.stopListen?.()
-  }
+  stopReplyListening()
 })
+
+onDeactivated(() => {
+  stopReplyListening()
+})
+
+const stopReplyListening = async () => {
+  if (!isListening.value) return
+
+  try {
+    await window.electronAPI?.clipboard?.stopListen?.()
+  } catch (e) {
+    console.error('[Reply] 停止监听失败:', e)
+  } finally {
+    isListening.value = false
+  }
+}
 
 const toggleListening = async () => {
   try {
     if (isListening.value) {
-      await window.electronAPI?.clipboard?.stopListen?.()
-      isListening.value = false
+      await stopReplyListening()
       toast.info('已停止剪贴板监听')
     } else {
       await window.electronAPI?.clipboard?.startListen?.()
@@ -316,8 +406,7 @@ const pasteFromClipboard = async () => {
     if (hasImage) {
       const imageData = await window.electronAPI?.clipboard?.getImage?.()
       if (imageData) {
-        pastedImage.value = imageData
-        toast.success('已粘贴图片，AI 将分析图片内容')
+        await setPastedImage(imageData)
         return
       }
     }
@@ -342,9 +431,8 @@ const handlePaste = async (event: ClipboardEvent) => {
         const file = item.getAsFile()
         if (file) {
           const reader = new FileReader()
-          reader.onload = (e) => {
-            pastedImage.value = e.target?.result as string
-            toast.success('已粘贴图片，AI 将分析图片内容')
+          reader.onload = async (e) => {
+            await setPastedImage(e.target?.result as string)
           }
           reader.readAsDataURL(file)
           event.preventDefault()
@@ -355,19 +443,78 @@ const handlePaste = async (event: ClipboardEvent) => {
   }
 }
 
+const setPastedImage = async (imageData: string) => {
+  pastedImage.value = imageData
+  inputText.value = ''
+  lastOCRText.value = ''
+  lastOCRLines.value = []
+  lastOCRSize.value = { width: 0, height: 0 }
+  parsedChats.value = []
+  toast.info('已粘贴图片，正在提取聊天内容')
+  await extractChatFromImage()
+}
+
 const removeImage = () => {
   pastedImage.value = null
   parsedChats.value = []
+  selectedTargetIndex.value = null
+  lastOCRText.value = ''
+  lastOCRLines.value = []
+  lastOCRSize.value = { width: 0, height: 0 }
+}
+
+const clearInputText = () => {
+  inputText.value = ''
+  detectedEmotion.value = null
+  emotionConfidence.value = 0
+  emotionSuggestions.value = []
+  scamWarning.value = null
+}
+
+const extractChatFromImage = async () => {
+  if (!pastedImage.value) return
+
+  isParsingImage.value = true
+  try {
+    const ocrResult = await window.electronAPI?.ocr?.recognize?.(pastedImage.value)
+    if (ocrResult?.success && ocrResult.text.trim()) {
+      lastOCRText.value = ocrResult.text
+      lastOCRLines.value = ocrResult.lines || []
+      lastOCRSize.value = {
+        width: ocrResult.width || 0,
+        height: ocrResult.height || 0
+      }
+
+      parsedChats.value = parseChatFromOCR(lastOCRLines.value, lastOCRSize.value, lastOCRText.value)
+      if (parsedChats.value.length > 0) {
+        selectedTargetIndex.value = getDefaultReplyTargetIndex(parsedChats.value)
+        toast.success(`已提取 ${parsedChats.value.length} 条对话`)
+      } else {
+        inputText.value = cleanOCRText(lastOCRText.value)
+        toast.info('未能明确区分对话双方，已保留识别到的主要文字')
+      }
+    } else {
+      toast.error('图片中没有识别到可用文字')
+    }
+  } catch (e) {
+    console.error('[Reply] 图片对话提取失败:', e)
+    toast.error('图片提取失败，请重试或手动粘贴文字')
+  } finally {
+    isParsingImage.value = false
+  }
 }
 
 const parseChatHistory = () => {
-  const text = inputText.value || pastedImage.value ? '' : ''
-  if (!text) {
-    parsedChats.value = []
-    return
+  if (lastOCRLines.value.length > 0) {
+    parsedChats.value = parseChatFromOCR(lastOCRLines.value, lastOCRSize.value, lastOCRText.value)
+  } else {
+    parsedChats.value = parseChatText(inputText.value)
   }
-  
-  parsedChats.value = parseChatText(text)
+
+  if (parsedChats.value.length > 0) {
+    selectedTargetIndex.value = getDefaultReplyTargetIndex(parsedChats.value)
+    inputText.value = ''
+  }
 }
 
 const parseChatText = (text: string): ChatItem[] => {
@@ -421,64 +568,312 @@ const parseChatText = (text: string): ChatItem[] => {
   return result
 }
 
+const parseChatFromOCR = (lines: OCRLine[], size: { width: number; height: number }, fallbackText: string): ChatItem[] => {
+  if (!lines.length || !size.width) {
+    return parseChatText(cleanOCRText(fallbackText))
+  }
+
+  const bounds = detectConversationBounds(lines, size)
+
+  const usableLines = lines
+    .filter(line => line.text && !isNoiseOCRLine(line.text))
+    .filter(line => {
+      if (!line.box || !size.height) return false
+      const yCenter = line.box.y + line.box.height / 2
+      const xCenter = line.box.x + line.box.width / 2
+      return xCenter >= bounds.left &&
+        xCenter <= bounds.right &&
+        yCenter >= bounds.top &&
+        yCenter <= bounds.bottom
+    })
+    .filter(line => !isNonMessageOCRLine(line, bounds))
+    .sort((a, b) => {
+      const ay = a.box?.y ?? 0
+      const by = b.box?.y ?? 0
+      if (Math.abs(ay - by) > 10) return ay - by
+      return (a.box?.x ?? 0) - (b.box?.x ?? 0)
+    })
+
+  const chats: ChatItem[] = []
+  let current: ChatItem | null = null
+  let currentBottom = -Infinity
+
+  for (const line of usableLines) {
+    const text = normalizeChatText(line.text)
+    if (!text) continue
+
+    const box = line.box
+    const centerX = box ? box.x + box.width / 2 : (bounds.left + bounds.right) / 2
+    const isMe = centerX > bounds.left + (bounds.right - bounds.left) * 0.56
+    const bottom = box ? box.y + box.height : currentBottom
+    const lineHeight = box?.height || 24
+    const shouldMerge = current && current.isMe === isMe && box && box.y - currentBottom < lineHeight * 1.25
+
+    if (shouldMerge && current) {
+      current.text = `${current.text}\n${text}`
+    } else {
+      current = { text, isMe }
+      chats.push(current)
+    }
+
+    currentBottom = Math.max(currentBottom, bottom)
+  }
+
+  return mergeShortOCRFragments(chats)
+}
+
+const detectConversationBounds = (lines: OCRLine[], size: { width: number; height: number }): ConversationBounds => {
+  const width = size.width || 1
+  const height = size.height || 1
+  const aspectRatio = width / height
+  const hasDesktopSidebar = aspectRatio > 1.15
+  const appRailLeft = detectAppLeftRail(lines, width, height)
+  const desktopChatLeft = hasDesktopSidebar ? detectDesktopChatLeft(lines, width, height) : 0
+  const left = Math.max(appRailLeft, desktopChatLeft)
+  const top = detectChatTop(lines, height)
+  const bottom = detectChatBottom(lines, height, top)
+
+  return {
+    left,
+    right: width,
+    top,
+    bottom
+  }
+}
+
+const detectAppLeftRail = (lines: OCRLine[], width: number, height: number): number => {
+  const navLines = lines
+    .filter(line => line.box && line.box.x < width * 0.24 && line.box.y > height * 0.04 && line.box.y < height * 0.98)
+    .filter(line => /^(DESK|回复|军师|联系人|润色|话术|历史|设置|DY)$/.test(normalizeChatText(line.text)))
+    .map(line => line.box!.x + line.box!.width)
+    .sort((a, b) => b - a)
+
+  if (navLines.length >= 2) {
+    return Math.min(width * 0.32, Math.max(width * 0.18, navLines[0] + width * 0.035))
+  }
+
+  return 0
+}
+
+const detectDesktopChatLeft = (lines: OCRLine[], width: number, height: number): number => {
+  const rightSideLines = lines
+    .filter(line => line.box && line.box.y > height * 0.06 && line.box.y < height * 0.92)
+    .filter(line => !isNoiseOCRLine(line.text))
+    .map(line => line.box!.x)
+    .filter(x => x > width * 0.22)
+    .sort((a, b) => a - b)
+
+  if (rightSideLines.length >= 2) {
+    return Math.max(width * 0.26, Math.min(width * 0.48, rightSideLines[0] - width * 0.04))
+  }
+
+  return width * 0.30
+}
+
+const detectChatTop = (lines: OCRLine[], height: number): number => {
+  const titleBottom = lines
+    .filter(line => line.box && isHeaderOCRLine(line.text))
+    .map(line => line.box!.y + line.box!.height)
+    .sort((a, b) => b - a)[0]
+
+  if (titleBottom && titleBottom < height * 0.24) {
+    return titleBottom + height * 0.025
+  }
+
+  return height * 0.08
+}
+
+const detectChatBottom = (lines: OCRLine[], height: number, top: number): number => {
+  const inputTop = lines
+    .filter(line => line.box && line.box.y > Math.max(top, height * 0.45))
+    .filter(line => isInputAreaOCRLine(line.text))
+    .map(line => line.box!.y)
+    .sort((a, b) => a - b)[0]
+
+  if (inputTop) {
+    return Math.max(top, inputTop - height * 0.025)
+  }
+
+  return height * 0.92
+}
+
+const normalizeChatText = (text: string): string => {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/^[·•。,\s]+/, '')
+    .replace(/[|｜]+/g, '')
+    .trim()
+}
+
+const cleanOCRText = (text: string): string => {
+  return text
+    .split('\n')
+    .map(normalizeChatText)
+    .filter(line => line && !isNoiseOCRLine(line))
+    .join('\n')
+}
+
+const isNoiseOCRLine = (text: string): boolean => {
+  const clean = normalizeChatText(text)
+  if (!clean) return true
+  if (isSpeakerTimeOCRLine(clean)) return true
+  if (isVoiceDurationOCRLine(clean)) return true
+  if (isMediaPlaceholderOCRLine(clean)) return true
+  if (/^\d{1,2}:\d{2}$/.test(clean)) return true
+  if (/^(微信|通讯录|发现|我|聊天信息|发送|按住说话|\+|返回|更多|语音|表情|文件传输助手)$/.test(clean)) return true
+  if (/^(今天|昨天|周[一二三四五六日天]|星期[一二三四五六日天])\s*\d{1,2}:\d{2}$/.test(clean)) return true
+  if (clean.length <= 1 && !/[\u4e00-\u9fa5a-zA-Z0-9]/.test(clean)) return true
+  return false
+}
+
+const isNonMessageOCRLine = (line: OCRLine, bounds: ConversationBounds): boolean => {
+  const clean = normalizeChatText(line.text)
+  if (!line.box || !clean) return false
+  if (isSpeakerTimeOCRLine(clean)) return true
+
+  const panelWidth = bounds.right - bounds.left
+  const xCenter = line.box.x + line.box.width / 2
+  const inLeftAvatarLane = xCenter < bounds.left + panelWidth * 0.24
+  const inRightAvatarLane = xCenter > bounds.right - panelWidth * 0.18
+  const compactBox = line.box.width < panelWidth * 0.18 && line.box.height < 58
+
+  return compactBox && (inLeftAvatarLane || inRightAvatarLane) && isAvatarTextOCRLine(clean)
+}
+
+const isSpeakerTimeOCRLine = (text: string): boolean => {
+  const clean = text.replace(/\s+/g, '')
+  return /^[@#]?[A-Za-z0-9_\-\u4e00-\u9fa5]{1,10}\d{1,2}:\d{2}$/.test(clean) ||
+    /^[@#]?[A-Za-z0-9_\-\u4e00-\u9fa5]{1,10}[：:]\d{1,2}$/.test(clean)
+}
+
+const isAvatarTextOCRLine = (text: string): boolean => {
+  const clean = text.replace(/\s+/g, '')
+  return /^[A-Z]{1,3}$/.test(clean) ||
+    /^[@#]?[A-Za-z0-9_\-\u4e00-\u9fa5]{1,8}$/.test(clean)
+}
+
+const isVoiceDurationOCRLine = (text: string): boolean => {
+  const clean = text
+    .replace(/[（）()\[\]【】]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’′]/g, "'")
+    .replace(/″/g, '"')
+    .trim()
+
+  return /^\d{1,3}["']+$/.test(clean) ||
+    /^\d{1,2}'\d{1,2}"?$/.test(clean) ||
+    /^\d{1,3}(秒|s|S)$/.test(clean)
+}
+
+const isMediaPlaceholderOCRLine = (text: string): boolean => {
+  const clean = text
+    .replace(/[（）()\[\]【】]/g, '')
+    .replace(/\s+/g, '')
+    .trim()
+
+  return /^(图片|视频|照片|相册|文件|表情|位置|名片|链接|小程序|语音消息|视频消息)$/.test(clean) ||
+    /^(收到|发送)?(一张|1张|一个|1个)?(图片|视频|照片|文件|表情|位置|名片|链接|小程序)$/.test(clean)
+}
+
+const isHeaderOCRLine = (text: string): boolean => {
+  const clean = normalizeChatText(text)
+  return /^(微信|WeChat|聊天信息|返回|更多|搜索|\d+)$/.test(clean)
+}
+
+const isInputAreaOCRLine = (text: string): boolean => {
+  const clean = normalizeChatText(text)
+  return /^(发送|按住说话|输入|语音|表情|\+|聊天信息)$/.test(clean) ||
+    /^(发送消息|请输入|输入消息|说点什么)/.test(clean)
+}
+
+const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
+  const merged: ChatItem[] = []
+
+  for (const chat of chats) {
+    const previous = merged[merged.length - 1]
+    if (previous && previous.isMe === chat.isMe && chat.text.length <= 4) {
+      previous.text = `${previous.text}\n${chat.text}`
+    } else {
+      merged.push({ ...chat })
+    }
+  }
+
+  return merged.filter(chat => {
+    const text = normalizeChatText(chat.text)
+    return text && !isVoiceDurationOCRLine(text) && !isMediaPlaceholderOCRLine(text)
+  })
+}
+
 const formatChatForAI = (chats: ChatItem[]): string => {
-  return chats.map(chat => {
-    return `${chat.isMe ? '我' : '对方'}：${chat.text}`
+  return chats.map((chat, index) => {
+    const targetMark = selectedTargetIndex.value === index ? '【回复目标】' : ''
+    return `${targetMark}${chat.isMe ? '我' : '对方'}：${chat.text}`
   }).join('\n')
 }
 
+const getDefaultReplyTargetIndex = (chats: ChatItem[]): number | null => {
+  for (let i = chats.length - 1; i >= 0; i--) {
+    if (!chats[i].isMe) return i
+  }
+  return chats.length > 0 ? chats.length - 1 : null
+}
+
+const selectReplyTarget = (index: number) => {
+  selectedTargetIndex.value = selectedTargetIndex.value === index ? null : index
+}
+
+const toggleChatSpeaker = (index: number) => {
+  parsedChats.value[index].isMe = !parsedChats.value[index].isMe
+}
+
+const removeParsedChat = (index: number) => {
+  parsedChats.value.splice(index, 1)
+  if (selectedTargetIndex.value === index) {
+    selectedTargetIndex.value = getDefaultReplyTargetIndex(parsedChats.value)
+  } else if (selectedTargetIndex.value !== null && selectedTargetIndex.value > index) {
+    selectedTargetIndex.value -= 1
+  }
+}
+
+const buildReplyContext = (): string => {
+  const base = parsedChats.value.length > 0 ? formatChatForAI(parsedChats.value) : inputText.value
+  const extra = parsedChats.value.length > 0 && inputText.value.trim() ? `\n\n【补充说明】${inputText.value.trim()}` : ''
+  const intent = selectedIntent.value !== 'natural' ? `\n\n【这次回复目标】${getIntentLabel(selectedIntent.value)}` : ''
+  const target = selectedTargetIndex.value !== null ? '\n\n请优先回复标记为【回复目标】的那一句。' : ''
+  return `${base}${extra}${intent}${target}`.trim()
+}
+
 const generateReply = async () => {
-  if (!inputText.value.trim() && !pastedImage.value) return
+  if (!canGenerate.value) return
 
   isGenerating.value = true
   replies.value = []
 
   try {
-    let context = inputText.value || ''
+    let context = buildReplyContext()
 
     // 如果有图片，先尝试用 OCR 识别
     if (pastedImage.value) {
-      toast.info('正在分析图片内容...')
-      console.log('[Reply] 正在进行 OCR 识别...')
-
-      try {
-        // 检查 OCR 是否可用
-        const ocrAvailable = await window.electronAPI?.ocr?.hasImage?.()
-        
-        if (ocrAvailable) {
-          // 使用 OCR 识别图片
-          const ocrResult = await window.electronAPI?.ocr?.recognize?.(pastedImage.value)
-          if (ocrResult && ocrResult.success && ocrResult.text.trim()) {
-            context = ocrResult.text
-            console.log('[Reply] OCR 识别成功:', context.substring(0, 100))
-            
-            // 解析识别到的聊天记录
-            parsedChats.value = parseChatText(context)
-            console.log('[Reply] 已解析到', parsedChats.value.length, '条聊天记录')
-          } else {
-            console.log('[Reply] OCR 未能识别图片中的文字，将图片发送给 AI 分析')
-          }
-        } else {
-          // OCR 不可用，直接发送图片给 AI
-          console.log('[Reply] OCR 不可用，将图片发送给 AI 分析')
-        }
-      } catch (ocrError) {
-        console.error('[Reply] OCR 识别失败:', ocrError)
-        console.log('[Reply] OCR 识别失败，将图片发送给 AI 分析')
+      if (parsedChats.value.length === 0 && !isParsingImage.value) {
+        toast.info('正在从图片提取聊天内容...')
+        await extractChatFromImage()
       }
     }
 
     // 如果有解析到的聊天记录，使用整理后的格式
     if (parsedChats.value.length > 0) {
-      context = formatChatForAI(parsedChats.value)
+      context = buildReplyContext()
       console.log('[Reply] 整理后的聊天记录:', context.substring(0, 100))
     }
+
+    const imageForAI = context.trim() ? undefined : pastedImage.value || undefined
 
     console.log(`[Reply] 正在生成回复... 风格: ${selectedStyle.value}`)
     const result = await window.electronAPI?.ai?.generateReply?.(
       context,
       selectedStyle.value,
-      pastedImage.value
+      imageForAI
     )
 
     if (result && result.length > 0) {
@@ -507,6 +902,28 @@ const generateReply = async () => {
     ]
   } finally {
     isGenerating.value = false
+  }
+}
+
+const rerollReply = async (index: number) => {
+  const current = replies.value[index]
+  if (!current || isRerollingIndex.value !== null) return
+
+  isRerollingIndex.value = index
+  try {
+    const result = await window.electronAPI?.ai?.generateReply?.(
+      buildReplyContext(),
+      current.style,
+      undefined
+    )
+    if (result?.[0]?.reply) {
+      replies.value[index] = { style: current.style, reply: result[0].reply }
+    }
+  } catch (e: any) {
+    console.error('[Reply] 换一句失败:', e)
+    toast.error(e.message || '换一句失败')
+  } finally {
+    isRerollingIndex.value = null
   }
 }
 
@@ -697,10 +1114,154 @@ const goToSettings = () => {
   background: var(--error);
 }
 
+.parse-status {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: rgba(15, 118, 110, 0.08);
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  color: var(--primary-dark);
+  font-size: var(--font-sm);
+  font-weight: 700;
+}
+
+.chat-parse-result {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--border-color);
+}
+
+.parse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.parse-title {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.btn-refresh {
+  min-height: 28px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chat-item {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.chat-item.me {
+  flex-direction: row-reverse;
+}
+
+.chat-item.target .chat-content {
+  border-color: rgba(15, 118, 110, 0.42);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.08);
+}
+
+.chat-avatar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: rgba(148, 135, 122, 0.14);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-item.me .chat-avatar {
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--primary-dark);
+}
+
+.chat-content {
+  max-width: calc(100% - 48px);
+  padding: 9px 12px;
+  border-radius: var(--radius-lg);
+  background: white;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-item.me .chat-content {
+  background: rgba(15, 118, 110, 0.1);
+  border-color: rgba(15, 118, 110, 0.18);
+}
+
+.chat-edit {
+  width: 100%;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.chat-tools {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-tool-btn {
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border-color);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chat-tool-btn.active {
+  background: rgba(15, 118, 110, 0.12);
+  border-color: rgba(15, 118, 110, 0.28);
+  color: var(--primary-dark);
+}
+
+.textarea-wrap {
+  position: relative;
+}
+
 .input-textarea {
   width: 100%;
   min-height: 150px;
   padding: var(--space-4);
+  padding-right: 64px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
@@ -715,6 +1276,26 @@ const goToSettings = () => {
   border-color: rgba(15, 118, 110, 0.5);
   box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
   background: rgba(255, 255, 255, 0.94);
+}
+
+.clear-text-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+.clear-text-btn:hover {
+  color: var(--error);
+  border-color: rgba(180, 35, 24, 0.22);
 }
 
 .signal-row {
@@ -787,6 +1368,14 @@ const goToSettings = () => {
 
 .style-selector {
   margin-top: var(--space-4);
+}
+
+.intent-selector {
+  margin-top: var(--space-4);
+}
+
+.intent-btn {
+  min-width: 68px;
 }
 
 .style-label {
@@ -970,6 +1559,11 @@ const goToSettings = () => {
 
 .btn-copy:hover {
   background: rgba(255, 255, 255, 0.98);
+}
+
+.btn-copy:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .btn-paste {

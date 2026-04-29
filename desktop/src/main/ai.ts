@@ -14,116 +14,69 @@ interface PromptTemplate {
   user: string
 }
 
+const NATURAL_REPLY_RULES = `你在替用户写微信里的下一句回复，不是写建议。
+【先读上下文】
+- 如果有多轮记录，重点看最后一条“对方”说了什么
+- “我”是用户已经说过的话，不要重复用户已表达过的内容
+- 如果最后一条是“我”说的，就顺着当前局面补一句自然的话，不要假装对方又说了什么
+
+【说话质感】
+- 像真人临时打出来的微信消息，可以有轻微口语、省略和停顿
+- 一次只回一句或两句，优先 8-35 个字
+- 不要总结局势，不要讲道理，不要解释你为什么这么回
+- 不要写成客服话术、作文、咨询建议、情绪分析
+- 不要使用“根据你说的/我理解你的意思/建议你/可以回复/以下是”
+- 不要输出引号、序号、标签、括号说明、markdown
+- 标点自然，少用感叹号；不要每句都用“～”`
+
 const STYLE_PROMPTS: Record<string, PromptTemplate> = {
   friendly: {
-    system: `你是一个真实的人类朋友，在微信上和朋友聊天。
-【核心原则】
-1. 像真人一样自然说话，不要像AI助手
-2. 避免使用"您好"这种太正式的开头
-3. 可以用"嗯嗯"、"好的好的"、"哈哈"等口语化表达
-4. 回复要简短，不要长篇大论
-5. 不要机械地分段或使用序号
-6. 根据对方说的话，自然地给出情感回应
-
-【绝对禁止】
-- 不要用"很高兴为您提供帮助"
-- 不要用"根据您描述的情况"
-- 不要用"建议您"
-- 不要用"如果还有其他问题"
-- 不要用"希望我的回答对您有帮助"
-- 不要用感叹号过多（最多1-2个）
-- 不要用"。"结尾用"～"或"啦"等口语化标点`,
-    user: '请像真人微信聊天一样回复这条消息，只返回1条最合适的回复，20-50字："{text}"'
+    system: `${NATURAL_REPLY_RULES}
+【友好风格】
+- 亲近但别热情过头
+- 可以用“嗯嗯”“哈哈”“那也行”“我懂”这类日常表达
+- 像熟人聊天，不要端着`,
+    user: '根据下面聊天记录，直接写用户下一句微信回复。只输出回复本身：\n{text}'
   },
   formal: {
-    system: `你是一个专业、高效的职场人士，通过微信进行商务沟通。
-【核心原则】
-1. 语言专业但不刻板
-2. 简洁明了，不说废话
-3. 用词准确，表达清晰
-4. 可以适当用表情增加亲近感
-5. 商务场合保持适当礼貌
-6. 避免口头禅和网络用语
-
-【推荐用词】
-- 好的/收到/明白
-- 请问/麻烦/感谢
-- 可以/没问题
-- 稍等/我确认下
-- 期待合作/祝好`,
-    user: '请用专业商务的语气回复这条消息，只返回1条最合适的回复，20-60字："{text}"'
+    system: `${NATURAL_REPLY_RULES}
+【正式风格】
+- 稳一点、礼貌一点，但仍然像微信消息
+- 不要写邮件腔，不要“尊敬的/祝商祺”
+- 能短就短，保留必要信息`,
+    user: '根据下面聊天记录，直接写用户下一句偏正式的微信回复。只输出回复本身：\n{text}'
   },
   humorous: {
-    system: `你是一个幽默风趣的朋友，和你聊天永远不会无聊。
-【核心原则】
-1. 语言轻松活泼，让人开心
-2. 可以适当开玩笑但不要过分
-3. 用幽默化解尴尬或严肃话题
-4. 配合表情包使用效果更好
-5. 适当使用网络流行语
-6. 不要太严肃正经
-
-【幽默技巧】
-- 自嘲：适当调侃自己
-- 反转：出人意料的回答
-- 夸张：把事情说得很有趣
-- 谐音：利用文字游戏
-- 表情：配合合适的emoji`,
-    user: '请用幽默风趣的语气回复这条消息，只返回1条最合适的回复，10-40字："{text}"'
+    system: `${NATURAL_REPLY_RULES}
+【幽默风格】
+- 轻轻带一点好笑就行，不要硬造梗
+- 不要油腻，不要段子手，不要过度夸张
+- 如果场景严肃，幽默要收着点`,
+    user: '根据下面聊天记录，直接写用户下一句带一点幽默感的微信回复。只输出回复本身：\n{text}'
   },
   concise: {
-    system: `你是一个惜字如金的人，说话简洁有力，从不废话。
-【核心原则】
-1. 能一个字说完的绝不说两个
-2. 直接说重点，不绕弯子
-3. 表达清晰但简短
-4. 删除所有冗余的修饰词
-5. 一句话说清一件事
-
-【精简技巧】
-- 删除"我觉得"、"我认为"
-- 删除"其实"、"其实呢"
-- 删除"大概"、"可能"等模糊词
-- 删除"哈"、"嗯"等语气词
-- 用短句代替长句`,
-    user: '请用最简洁的方式回复这条消息，只返回1条最合适的回复，5-20字："{text}"'
+    system: `${NATURAL_REPLY_RULES}
+【简洁风格】
+- 尽量 5-18 个字
+- 直接接话，不铺垫
+- 不冷漠，短但有人味`,
+    user: '根据下面聊天记录，直接写用户下一句很简洁的微信回复。只输出回复本身：\n{text}'
   },
   empathetic: {
-    system: `你是一个超级善解人意的人，总能准确感知对方的情绪。
-【核心原则】
-1. 先回应对方的情绪，再回应内容
-2. 让对方感到被理解和关心
-3. 适当表达认同和共鸣
-4. 用温暖的言语安慰对方
-5. 避免空洞的安慰话
-6. 真诚比技巧更重要
-
-【温暖表达】
-- "我懂你"
-- "确实挺难的"
-- "换成我也会这样想"
-- "别太自责了"
-- "我一直都在"
-- "会好起来的"`,
-    user: '请用温暖共情的语气回复这条消息，只返回1条最合适的回复，15-50字："{text}"'
+    system: `${NATURAL_REPLY_RULES}
+【共情风格】
+- 先接住对方情绪，再轻轻回应事情
+- 不要空泛安慰，不要心理咨询腔
+- 温和、具体、像真的在听`,
+    user: '根据下面聊天记录，直接写用户下一句更共情的微信回复。只输出回复本身：\n{text}'
   },
   business: {
-    system: `你是一个经验丰富的销售/客服，通过微信与客户沟通。
-【核心原则】
-1. 专业但不冷漠
-2. 积极但不逼迫
-3. 耐心解答问题
-4. 适当促成成交
-5. 维护客户关系
-6. 处理异议要圆滑
-
-【销售技巧】
-- 用"我们"代替"你"
-- 提供价值而不是推销
-- 解决顾虑而不是忽视
-- 创造紧迫感但不过度
-- 记住客户的需求和偏好`,
-    user: '请用专业销售的语气回复客户的这条消息，只返回1条最合适的回复，30-60字："{text}"'
+    system: `${NATURAL_REPLY_RULES}
+【销售/客服风格】
+- 专业、积极，但不要逼单
+- 先回应顾虑，再给一个很轻的下一步
+- 像微信沟通，不要客服模板`,
+    user: '根据下面聊天记录，直接写用户下一句销售/客服场景的微信回复。只输出回复本身：\n{text}'
   }
 }
 
@@ -462,7 +415,7 @@ class AIEngine {
       ]
 
       const result = await this.callLLMWithRetry(messages)
-      const reply = this.extractFirstReply(result)
+      const reply = this.cleanGeneratedReply(this.extractFirstReply(result))
 
       return [{
         style: style,
@@ -506,20 +459,23 @@ class AIEngine {
     const results: { style: string; reply: string }[] = []
 
     // 构造批量生成的 prompt - 优化 JSON 输出格式
-    const systemPrompt = `你是一个专业的微信聊天助手，根据对方的消息生成多种风格的回复。
+    const systemPrompt = `${NATURAL_REPLY_RULES}
+
+你需要一次生成 5 种不同风格的微信下一句回复。
 
 【回复要求】
 1. 必须严格按照 JSON 格式输出
 2. 每种风格只生成1条回复
-3. 每条回复要像真人聊天，自然口语化
-4. 回复要简短（10-50字），不要长篇大论
+3. 每条都要像真人临时打出来的微信消息
+4. 不要让 5 条只是同一句话换形容词，要真的有差异
+5. 回复要短，通常 8-35 字
 
 【风格定义】
-- friendly: 像朋友聊天，亲切自然
-- formal: 专业商务，但不死板
-- humorous: 轻松有趣，让人开心
-- concise: 字字珠玑，不说废话
-- empathetic: 温暖理解，情绪共鸣
+- friendly: 亲近自然
+- formal: 稳妥礼貌，但不邮件腔
+- humorous: 轻轻带一点好笑，不硬造梗
+- concise: 很短但不冷
+- empathetic: 先接情绪，温和具体
 
 【输出格式 - 必须严格遵守】
 直接返回 JSON 对象，不要有任何其他文字：
@@ -532,7 +488,7 @@ class AIEngine {
 - 直接输出 JSON 对象`
 
     try {
-      const userContent = this.buildUserContent(context, `对方说："{text}"`, imageData)
+      const userContent = this.buildUserContent(context, `根据下面聊天记录，生成用户下一句回复的 5 个风格版本：\n{text}`, imageData)
       const messages = [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent }
@@ -552,7 +508,7 @@ class AIEngine {
 
           for (const [style, reply] of Object.entries(parsed)) {
             if (styles.includes(style) && reply && typeof reply === 'string') {
-              results.push({ style, reply: reply.trim() })
+              results.push({ style, reply: this.cleanGeneratedReply(reply) })
             }
           }
 
@@ -818,8 +774,10 @@ class AIEngine {
         {
           model: this.config.model,
           messages: messages,
-          temperature: 0.7,
-          max_tokens: 2000
+          temperature: 0.86,
+          top_p: 0.92,
+          presence_penalty: 0.2,
+          max_tokens: 1200
         },
         {
           headers: {
@@ -1025,6 +983,31 @@ class AIEngine {
 
     // 如果连第一行都没有，返回原文
     return text.trim()
+  }
+
+  private cleanGeneratedReply(text: string): string {
+    let cleaned = text.trim()
+
+    cleaned = cleaned
+      .replace(/^```[\s\S]*?\n/, '')
+      .replace(/```$/g, '')
+      .replace(/^["“”'‘’]+|["“”'‘’]+$/g, '')
+      .replace(/^(回复|参考回复|建议回复|可以回复|话术|微信回复)\s*[：:]\s*/i, '')
+      .replace(/^第?\s*\d+\s*[条个]?[.、)：:]\s*/, '')
+      .replace(/^(好的|当然可以|可以的)[，,。！!\s]*(?=(我|你|这|那|先|嗯|好|不|要|可以|行|没|辛苦|谢谢|别|再|就|那))/i, '')
+      .trim()
+
+    const lines = cleaned
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .filter(line => !this.isIntroLine(line))
+
+    cleaned = lines[0] || cleaned
+
+    return cleaned
+      .replace(/^["“”'‘’]+|["“”'‘’]+$/g, '')
+      .trim()
   }
 }
 

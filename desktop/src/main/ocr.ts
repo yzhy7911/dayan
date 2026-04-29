@@ -6,6 +6,24 @@ import * as path from 'path'
 import * as fs from 'fs'
 import sharp from 'sharp'
 
+interface OCRLine {
+  text: string
+  confidence?: number
+  box?: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+}
+
+interface OCRRecognizeResult {
+  text: string
+  lines: OCRLine[]
+  width: number
+  height: number
+}
+
 class OCRService {
   private ocrService: PaddleOcrService | null = null
   private isInitialized = false
@@ -39,6 +57,14 @@ class OCRService {
       return [' ', ...chars]
     }
     return chars
+  }
+
+  private hasModelFiles(): boolean {
+    return Boolean(
+      this.findModelPath('ch_PP-OCRv4_det_infer.onnx') &&
+      this.findModelPath('ch_PP-OCRv4_rec_infer.onnx') &&
+      this.findModelPath('ppocr_keys_v1.txt')
+    )
   }
 
   async init(): Promise<void> {
@@ -97,14 +123,14 @@ class OCRService {
     }
   }
 
-  async recognizeImage(buffer: Buffer): Promise<string> {
+  async recognizeImage(buffer: Buffer): Promise<OCRRecognizeResult> {
     if (!this.isInitialized || !this.ocrService) {
       await this.initialize()
     }
 
     if (!this.ocrService) {
       logger.error('OCR', 'OCR服务未初始化')
-      return ''
+      return { text: '', lines: [], width: 0, height: 0 }
     }
 
     try {
@@ -155,33 +181,45 @@ class OCRService {
       const result = await this.ocrService.recognize(input)
       
       let text = ''
+      const lines: OCRLine[] = []
       for (const item of result) {
         if (item.text) {
-          text += item.text + '\n'
+          const cleanText = item.text.trim()
+          text += cleanText + '\n'
+          lines.push({
+            text: cleanText,
+            confidence: item.confidence,
+            box: item.box
+          })
         }
       }
 
       text = text.trim()
       logger.info('OCR', `识别完成: "${text}"`)
-      return text
+      return {
+        text,
+        lines,
+        width: metadata.width || 0,
+        height: metadata.height || 0
+      }
     } catch (e) {
       logger.error('OCR', `识别失败: ${e}`)
-      return ''
+      return { text: '', lines: [], width: 0, height: 0 }
     }
   }
 
   registerIPC(): void {
     ipcMain.handle('ocr:recognize', async (_event: IpcMainInvokeEvent, buffer: Buffer) => {
       try {
-        const text = await this.recognizeImage(buffer)
-        return { success: true, text }
+        const result = await this.recognizeImage(buffer)
+        return { success: true, ...result }
       } catch (e) {
-        return { success: false, text: '', error: String(e) }
+        return { success: false, text: '', lines: [], width: 0, height: 0, error: String(e) }
       }
     })
 
     ipcMain.handle('ocr:hasImage', async () => {
-      return this.isInitialized && this.ocrService !== null
+      return this.isInitialized || this.hasModelFiles()
     })
 
     ipcMain.handle('ocr:getImage', async () => {

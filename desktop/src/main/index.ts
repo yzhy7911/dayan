@@ -194,8 +194,8 @@ safeHandle('license:isActivated', () => {
 })
 
 // === AI IPC ===
-safeHandle('ai:generateReply', (_, context, style) => {
-  return aiEngine.generateReply(context, style)
+safeHandle('ai:generateReply', (_, context, style, imageData) => {
+  return aiEngine.generateReply(context, style, imageData)
 })
 
 safeHandle('ai:polishText', (_, text, style) => {
