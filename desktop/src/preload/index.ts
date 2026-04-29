@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     paste: () => ipcRenderer.invoke('clipboard:paste'),
     startListen: () => ipcRenderer.invoke('clipboard:startListen'),
     stopListen: () => ipcRenderer.invoke('clipboard:stopListen'),
+    hasImage: () => ipcRenderer.invoke('clipboard:hasImage'),
+    getImage: () => ipcRenderer.invoke('clipboard:getImage'),
     onChanged: (callback: (text: string) => void) => {
       ipcRenderer.on('clipboard:changed', (_, text) => callback(text))
     }
@@ -76,6 +78,8 @@ declare global {
         paste: () => Promise<boolean>
         startListen: () => Promise<boolean>
         stopListen: () => Promise<boolean>
+        hasImage: () => Promise<boolean>
+        getImage: () => Promise<string | null>
         onChanged: (callback: (text: string) => void) => void
       }
       ocr: {

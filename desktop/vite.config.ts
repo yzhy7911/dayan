@@ -17,14 +17,20 @@ export default defineConfig({
           options.startup()
         },
         vite: {
-          build: {
-            sourcemap: true,
-            outDir: 'dist/main',
-            rollupOptions: {
-              external: ['node-machine-id']
+            build: {
+              sourcemap: true,
+              outDir: 'dist/main',
+              rollupOptions: {
+                external: ['node-machine-id', 'onnxruntime-node', 'sharp', 'paddleocr'],
+                output: {
+                  dynamicRequireTargets: [
+                    'node_modules/onnxruntime-node/**',
+                    'node_modules/sharp/**'
+                  ]
+                }
+              }
             }
           }
-        }
       },
       {
         entry: 'src/preload/index.ts',

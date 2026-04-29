@@ -5,6 +5,7 @@ interface ToastInstance {
   success(message: string): void
   error(message: string): void
   info(message: string): void
+  warning(message: string): void
   loading(message?: string): number
   remove(id: number): void
 }
@@ -52,6 +53,7 @@ export function useToast(): ToastInstance {
     success: (message: string) => show(message, 'success'),
     error: (message: string) => show(message, 'error', 4000),
     info: (message: string) => show(message, 'info'),
+    warning: (message: string) => show(message, 'warning', 4000),
     loading: (message: string = '加载中...') => show(message, 'loading', 0),
     remove
   }

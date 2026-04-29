@@ -384,8 +384,8 @@ class AIEngine {
       ipcMain.handle(channel, handler)
     }
 
-    safeHandle('ai:generateReply', (_event: IpcMainInvokeEvent, context: string, style: string) => {
-      return this.generateReply(context, style)
+    safeHandle('ai:generateReply', (_event: IpcMainInvokeEvent, context: string, style: string, imageData?: string) => {
+      return this.generateReply(context, style, imageData)
     })
 
     safeHandle('ai:polishText', (_event: IpcMainInvokeEvent, text: string, style: string) => {
@@ -446,10 +446,10 @@ class AIEngine {
     }
   }
 
-  async generateReply(context: string, style: string = 'friendly'): Promise<{ style: string; reply: string }[]> {
+  async generateReply(context: string, style: string = 'friendly', imageData?: string): Promise<{ style: string; reply: string }[]> {
     // 如果 style 是 'all'，生成所有风格的回复
     if (style === 'all') {
-      return await this.generateAllStyleReplies(context)
+      return await this.generateAllStyleReplies(context, imageData)
     }
 
     // 否则生成单一风格的回复
@@ -458,7 +458,7 @@ class AIEngine {
     try {
       const messages = [
         { role: 'system', content: template.system },
-        { role: 'user', content: template.user.replace('{text}', context) }
+        { role: 'user', content: this.buildUserContent(context, template.user, imageData) }
       ]
 
       const result = await this.callLLMWithRetry(messages)
@@ -477,8 +477,31 @@ class AIEngine {
     }
   }
 
+  private buildUserContent(context: string, template: string, imageData?: string): any {
+    // 如果有图片数据，构建包含图片的内容
+    if (imageData && imageData.startsWith('data:')) {
+      // 提取 base64 数据（去掉 data:image/xxx;base64, 前缀）
+      const base64Data = imageData.split(',')[1]
+      
+      return [
+        {
+          type: 'text',
+          text: template.replace('{text}', context || '[图片内容]')
+        },
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:image/png;base64,${base64Data}`
+          }
+        }
+      ]
+    }
+    
+    return template.replace('{text}', context)
+  }
+
   // 生成所有风格的回复
-  private async generateAllStyleReplies(context: string): Promise<{ style: string; reply: string }[]> {
+  private async generateAllStyleReplies(context: string, imageData?: string): Promise<{ style: string; reply: string }[]> {
     const styles = ['friendly', 'formal', 'humorous', 'concise', 'empathetic']
     const results: { style: string; reply: string }[] = []
 
@@ -509,9 +532,10 @@ class AIEngine {
 - 直接输出 JSON 对象`
 
     try {
+      const userContent = this.buildUserContent(context, `对方说："{text}"`, imageData)
       const messages = [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `对方说："${context}"` }
+        { role: 'user', content: userContent }
       ]
 
       const result = await this.callLLM(messages)

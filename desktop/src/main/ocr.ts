@@ -1,74 +1,193 @@
-import { clipboard, ipcMain, IpcMainInvokeEvent } from 'electron'
+import { ipcMain, IpcMainInvokeEvent, app } from 'electron'
+import * as ort from 'onnxruntime-node'
+import { PaddleOcrService } from 'paddleocr'
+import { logger } from './logger'
+import * as path from 'path'
+import * as fs from 'fs'
+import sharp from 'sharp'
 
-class OCRManager {
-  init() {
-    this.setupIpcHandlers()
+class OCRService {
+  private ocrService: PaddleOcrService | null = null
+  private isInitialized = false
+
+  private findModelPath(modelName: string): string | null {
+    const possiblePaths = [
+      path.join(__dirname, '../../models', modelName),
+      path.join(app.getAppPath(), 'models', modelName),
+      path.join(process.cwd(), 'models', modelName),
+      `/Volumes/data/develop/wechatrq/desktop/models/${modelName}`
+    ]
+    
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        return p
+      }
+    }
+    return null
   }
 
-  private setupIpcHandlers() {
-    const safeHandle = (channel: string, handler: any) => {
-      ipcMain.removeHandler(channel)
-      ipcMain.handle(channel, handler)
+  private async loadModelBuffer(modelPath: string): Promise<ArrayBuffer> {
+    const buffer = fs.readFileSync(modelPath)
+    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+  }
+
+  private async loadDictionary(dictPath: string): Promise<string[]> {
+    const content = fs.readFileSync(dictPath, 'utf-8')
+    const chars = content.split('\n').map(line => line.trim()).filter(line => line.length > 0)
+    
+    if (chars.length > 0 && chars[0] !== ' ') {
+      return [' ', ...chars]
+    }
+    return chars
+  }
+
+  async init(): Promise<void> {
+    this.registerIPC()
+    return this.initialize()
+  }
+
+  async initialize(): Promise<void> {
+    if (this.isInitialized && this.ocrService) {
+      return
     }
 
-    safeHandle('ocr:hasImage', () => {
-      return this.hasImage()
-    })
+    logger.info('OCR', '开始初始化 PaddleOCR...')
 
-    safeHandle('ocr:getImage', () => {
-      return this.getImage()
-    })
-
-    safeHandle('ocr:recognize', async (_event: IpcMainInvokeEvent, imageData?: string) => {
-      return this.recognize(imageData)
-    })
-  }
-
-  hasImage(): boolean {
-    const image = clipboard.readImage()
-    return !image.isEmpty()
-  }
-
-  getImage(): string | null {
-    const image = clipboard.readImage()
-    if (image.isEmpty()) return null
-
-    // 转换为 base64
-    const dataUrl = image.toDataURL()
-    return dataUrl
-  }
-
-  async recognize(imageData?: string): Promise<{ success: boolean; text: string; error?: string }> {
     try {
-      // TODO: 未来可以集成本地 OCR 库（如 PaddleOCR、Tesseract）
-      // 当前方案：通过 AI 引擎的多模态能力识别
-      // 先保存图片到临时文件
-      let imageToUse: string | null = imageData || null
+      const detPath = this.findModelPath('ch_PP-OCRv4_det_infer.onnx')
+      const recPath = this.findModelPath('ch_PP-OCRv4_rec_infer.onnx')
+      const dictPath = this.findModelPath('ppocr_keys_v1.txt')
 
-      if (!imageToUse) {
-        const image = clipboard.readImage()
-        if (image.isEmpty()) {
-          return { success: false, text: '', error: '剪贴板中没有图片' }
-        }
-        imageToUse = image.toDataURL()
+      if (!detPath || !recPath || !dictPath) {
+        logger.error('OCR', '未能找到所有必要的模型文件')
+        return
       }
 
-      // 对于 MVP 版本，我们直接返回提示，让 AI 引擎处理
-      // 实际上，识别逻辑应该在 AI 引擎中使用 vision 模型
-      return {
-        success: true,
-        text: '', // 留空，让 AI 引擎直接处理图片
-        error: undefined
-      }
+      logger.info('OCR', `检测模型: ${detPath}`)
+      logger.info('OCR', `识别模型: ${recPath}`)
+      logger.info('OCR', `字符字典: ${dictPath}`)
+
+      const detBuffer = await this.loadModelBuffer(detPath)
+      const recBuffer = await this.loadModelBuffer(recPath)
+      const dictionary = await this.loadDictionary(dictPath)
+
+      logger.info('OCR', `字符字典加载成功，共 ${dictionary.length} 个字符`)
+
+      this.ocrService = await PaddleOcrService.createInstance({
+        ort,
+        detection: {
+          modelBuffer: detBuffer,
+          minimumAreaThreshold: 24,
+          textPixelThreshold: 0.55,
+          paddingBoxVertical: 0.3,
+          paddingBoxHorizontal: 0.5,
+        },
+        recognition: {
+          modelBuffer: recBuffer,
+          charactersDictionary: dictionary,
+          imageHeight: 48,
+        },
+      })
+
+      this.isInitialized = true
+      logger.info('OCR', 'PaddleOCR 初始化完成')
     } catch (e) {
-      console.error('OCR recognize failed:', e)
-      return {
-        success: false,
-        text: '',
-        error: e instanceof Error ? e.message : '识别失败'
-      }
+      logger.error('OCR', `初始化失败: ${e}`)
+      throw e
     }
+  }
+
+  async recognizeImage(buffer: Buffer): Promise<string> {
+    if (!this.isInitialized || !this.ocrService) {
+      await this.initialize()
+    }
+
+    if (!this.ocrService) {
+      logger.error('OCR', 'OCR服务未初始化')
+      return ''
+    }
+
+    try {
+      logger.info('OCR', `开始识别图片... 数据大小: ${buffer.length} 字节`)
+
+      let rawBuffer = buffer
+      
+      const bufferStr = buffer.toString('utf-8')
+      if (bufferStr.startsWith('data:image/')) {
+        logger.info('OCR', '检测到 Data URL 格式，需要解码')
+        
+        const match = bufferStr.match(/^data:image\/[^;]+;base64,(.+)$/)
+        if (match) {
+          rawBuffer = Buffer.from(match[1], 'base64')
+          logger.info('OCR', `Base64 解码完成，原始图片大小: ${rawBuffer.length} 字节`)
+        } else {
+          throw new Error('无效的 Data URL 格式')
+        }
+      }
+
+      let image: Buffer
+      let metadata: sharp.Metadata
+
+      try {
+        metadata = await sharp(rawBuffer).metadata()
+        logger.info('OCR', `图片格式: ${metadata.format}, 尺寸: ${metadata.width}x${metadata.height}`)
+        image = await sharp(rawBuffer)
+          .removeAlpha()
+          .raw()
+          .toBuffer()
+      } catch (formatError) {
+        logger.warn('OCR', `sharp无法识别图片格式: ${formatError}`)
+        
+        const header = rawBuffer.slice(0, 16).toString('hex')
+        logger.info('OCR', `图片头部十六进制: ${header}`)
+        
+        throw new Error(`不支持的图片格式: ${formatError}`)
+      }
+
+      const input = {
+        data: new Uint8Array(image),
+        width: metadata.width || 0,
+        height: metadata.height || 0,
+      }
+
+      logger.info('OCR', `输入数据: ${input.width}x${input.height}, 数据长度: ${input.data.length}`)
+
+      const result = await this.ocrService.recognize(input)
+      
+      let text = ''
+      for (const item of result) {
+        if (item.text) {
+          text += item.text + '\n'
+        }
+      }
+
+      text = text.trim()
+      logger.info('OCR', `识别完成: "${text}"`)
+      return text
+    } catch (e) {
+      logger.error('OCR', `识别失败: ${e}`)
+      return ''
+    }
+  }
+
+  registerIPC(): void {
+    ipcMain.handle('ocr:recognize', async (_event: IpcMainInvokeEvent, buffer: Buffer) => {
+      try {
+        const text = await this.recognizeImage(buffer)
+        return { success: true, text }
+      } catch (e) {
+        return { success: false, text: '', error: String(e) }
+      }
+    })
+
+    ipcMain.handle('ocr:hasImage', async () => {
+      return this.isInitialized && this.ocrService !== null
+    })
+
+    ipcMain.handle('ocr:getImage', async () => {
+      return null
+    })
   }
 }
 
-export const ocrManager = new OCRManager()
+export const ocrManager = new OCRService()

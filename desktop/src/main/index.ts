@@ -105,21 +105,8 @@ app.whenReady().then(async () => {
       logger.info('Main', '✅ Electron 已就绪')
 
       // ==================================================
-      // 第一优先级：先注册 OCR handler
+      // OCR 服务（低优先级，在窗口创建后初始化）
       // ==================================================
-      console.log('[OCR] 🚀 正在注册 OCR handler...')
-      // OCR 功能暂禁用，后续优化后再开启
-      // ipcMain.handle('ocr:captureAndRecognize', async () => {
-      //   console.log('[OCR] 🔥 收到识别请求')
-      //   const rawText = ['张三 14:32', '你好，最近怎么样？', '李四 14:35', '挺好的，下周有空一起吃饭吗？'].join('\n')
-      //   const messages = rawText.split('\n').filter(l => l.trim()).map(l => ({ speaker: '未知', content: l }))
-      //   return { success: true, rawText, lines: [], messages, imagePath: '' }
-      // })
-      ipcMain.handle('ocr:parseChat', async (_event, text: string) => {
-        const messages = text.split('\n').filter(l => l.trim()).map(l => ({ speaker: '未知', content: l }))
-        return { success: true, messages }
-      })
-      console.log('[OCR] ✅✅✅ OCR handler 全部注册成功！')
 
       // 数据存储使用 Dexie.js（IndexedDB），无需主进程处理
 

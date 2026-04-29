@@ -42,6 +42,25 @@
         <button class="remove-image-btn" @click="removeImage">×</button>
       </div>
 
+      <div v-if="parsedChats.length > 0" class="chat-parse-result">
+        <div class="parse-header">
+          <span class="parse-title">已解析的聊天记录</span>
+          <button class="btn-refresh" @click="parseChatHistory">🔄 重新解析</button>
+        </div>
+        <div class="chat-list">
+          <div
+            v-for="(chat, index) in parsedChats"
+            :key="index"
+            :class="['chat-item', chat.isMe ? 'me' : 'other']"
+          >
+            <span class="chat-avatar">{{ chat.isMe ? '我' : '对方' }}</span>
+            <div class="chat-content">
+              <p>{{ chat.text }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <textarea
         v-model="inputText"
         class="input-textarea"
@@ -83,7 +102,7 @@
 
       <button
         class="generate-btn"
-        :disabled="!inputText.trim() || isGenerating"
+        :disabled="!inputText.trim() && !pastedImage || isGenerating"
         @click="generateReply"
       >
         <span v-if="isGenerating">正在生成回复…</span>
@@ -161,6 +180,13 @@ const isGenerating = ref(false)
 const replies = ref<{ style: string; reply: string }[]>([])
 const isListening = ref(false)
 const pastedImage = ref<string | null>(null)
+
+// 聊天记录解析相关
+interface ChatItem {
+  text: string
+  isMe: boolean
+}
+const parsedChats = ref<ChatItem[]>([])
 
 // 情绪识别相关
 const detectedEmotion = ref<string | null>(null)
@@ -286,9 +312,9 @@ const handleClipboardChange = (text: string) => {
 const pasteFromClipboard = async () => {
   try {
     // 先检查是否有图片
-    const hasImage = await window.electronAPI?.ocr?.hasImage?.()
+    const hasImage = await window.electronAPI?.clipboard?.hasImage?.()
     if (hasImage) {
-      const imageData = await window.electronAPI?.ocr?.getImage?.()
+      const imageData = await window.electronAPI?.clipboard?.getImage?.()
       if (imageData) {
         pastedImage.value = imageData
         toast.success('已粘贴图片，AI 将分析图片内容')
@@ -331,6 +357,74 @@ const handlePaste = async (event: ClipboardEvent) => {
 
 const removeImage = () => {
   pastedImage.value = null
+  parsedChats.value = []
+}
+
+const parseChatHistory = () => {
+  const text = inputText.value || pastedImage.value ? '' : ''
+  if (!text) {
+    parsedChats.value = []
+    return
+  }
+  
+  parsedChats.value = parseChatText(text)
+}
+
+const parseChatText = (text: string): ChatItem[] => {
+  const result: ChatItem[] = []
+  
+  const lines = text.split('\n').filter(line => line.trim())
+  
+  let currentSpeaker: 'me' | 'other' | null = null
+  let currentText = ''
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim()
+    
+    if (trimmedLine.startsWith('我：') || trimmedLine.startsWith('我:') || trimmedLine.startsWith('我 ')) {
+      if (currentSpeaker !== null && currentText) {
+        result.push({ text: currentText.trim(), isMe: currentSpeaker === 'me' })
+      }
+      currentSpeaker = 'me'
+      currentText = trimmedLine.replace(/^我[：:\s]/, '')
+    } else if (trimmedLine.startsWith('对方：') || trimmedLine.startsWith('对方:') || 
+               trimmedLine.startsWith('朋友：') || trimmedLine.startsWith('朋友:') ||
+               trimmedLine.startsWith('他：') || trimmedLine.startsWith('他:') ||
+               trimmedLine.startsWith('她：') || trimmedLine.startsWith('她:')) {
+      if (currentSpeaker !== null && currentText) {
+        result.push({ text: currentText.trim(), isMe: currentSpeaker === 'me' })
+      }
+      currentSpeaker = 'other'
+      currentText = trimmedLine.replace(/^(对方|朋友|他|她)[：:\s]/, '')
+    } else if (trimmedLine.match(/^[\u4e00-\u9fa5]{1,4}[：:]/)) {
+      if (currentSpeaker !== null && currentText) {
+        result.push({ text: currentText.trim(), isMe: currentSpeaker === 'me' })
+      }
+      const match = trimmedLine.match(/^([\u4e00-\u9fa5]{1,4})[：:]/)
+      if (match && match[1] === '我') {
+        currentSpeaker = 'me'
+      } else {
+        currentSpeaker = 'other'
+      }
+      currentText = trimmedLine.replace(/^[\u4e00-\u9fa5]{1,4}[：:]/, '')
+    } else if (currentSpeaker !== null) {
+      currentText += '\n' + trimmedLine
+    } else {
+      result.push({ text: trimmedLine, isMe: false })
+    }
+  }
+  
+  if (currentSpeaker !== null && currentText) {
+    result.push({ text: currentText.trim(), isMe: currentSpeaker === 'me' })
+  }
+  
+  return result
+}
+
+const formatChatForAI = (chats: ChatItem[]): string => {
+  return chats.map(chat => {
+    return `${chat.isMe ? '我' : '对方'}：${chat.text}`
+  }).join('\n')
 }
 
 const generateReply = async () => {
@@ -340,17 +434,51 @@ const generateReply = async () => {
   replies.value = []
 
   try {
-    // 构建包含图片的提示
-    let prompt = inputText.value
+    let context = inputText.value || ''
+
+    // 如果有图片，先尝试用 OCR 识别
     if (pastedImage.value) {
-      prompt = '[图片] ' + prompt
       toast.info('正在分析图片内容...')
+      console.log('[Reply] 正在进行 OCR 识别...')
+
+      try {
+        // 检查 OCR 是否可用
+        const ocrAvailable = await window.electronAPI?.ocr?.hasImage?.()
+        
+        if (ocrAvailable) {
+          // 使用 OCR 识别图片
+          const ocrResult = await window.electronAPI?.ocr?.recognize?.(pastedImage.value)
+          if (ocrResult && ocrResult.success && ocrResult.text.trim()) {
+            context = ocrResult.text
+            console.log('[Reply] OCR 识别成功:', context.substring(0, 100))
+            
+            // 解析识别到的聊天记录
+            parsedChats.value = parseChatText(context)
+            console.log('[Reply] 已解析到', parsedChats.value.length, '条聊天记录')
+          } else {
+            console.log('[Reply] OCR 未能识别图片中的文字，将图片发送给 AI 分析')
+          }
+        } else {
+          // OCR 不可用，直接发送图片给 AI
+          console.log('[Reply] OCR 不可用，将图片发送给 AI 分析')
+        }
+      } catch (ocrError) {
+        console.error('[Reply] OCR 识别失败:', ocrError)
+        console.log('[Reply] OCR 识别失败，将图片发送给 AI 分析')
+      }
+    }
+
+    // 如果有解析到的聊天记录，使用整理后的格式
+    if (parsedChats.value.length > 0) {
+      context = formatChatForAI(parsedChats.value)
+      console.log('[Reply] 整理后的聊天记录:', context.substring(0, 100))
     }
 
     console.log(`[Reply] 正在生成回复... 风格: ${selectedStyle.value}`)
     const result = await window.electronAPI?.ai?.generateReply?.(
-      prompt,
-      selectedStyle.value
+      context,
+      selectedStyle.value,
+      pastedImage.value
     )
 
     if (result && result.length > 0) {
@@ -369,12 +497,12 @@ const generateReply = async () => {
         }
       ]
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('[Reply] 生成失败:', e)
     replies.value = [
       {
         style: 'friendly',
-        reply: '生成失败，请检查网络连接或 API 配置'
+        reply: e.message || '生成失败，请检查网络连接或 API 配置'
       }
     ]
   } finally {

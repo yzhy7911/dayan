@@ -37,6 +37,14 @@ class ClipboardManager {
     safeHandle('clipboard:paste', () => {
       return this.simulatePaste()
     })
+
+    safeHandle('clipboard:hasImage', () => {
+      return this.hasImage()
+    })
+
+    safeHandle('clipboard:getImage', () => {
+      return this.getImage()
+    })
   }
 
   startListening(): boolean {
@@ -105,6 +113,25 @@ class ClipboardManager {
     } catch (e) {
       console.error('Simulate paste failed:', e)
       return false
+    }
+  }
+
+  hasImage(): boolean {
+    const image = clipboard.readImage()
+    return !image.isEmpty()
+  }
+
+  getImage(): string | null {
+    try {
+      const image = clipboard.readImage()
+      if (image.isEmpty()) {
+        return null
+      }
+      const buffer = image.toPNG()
+      return `data:image/png;base64,${buffer.toString('base64')}`
+    } catch (e) {
+      console.error('Get image from clipboard failed:', e)
+      return null
     }
   }
 
