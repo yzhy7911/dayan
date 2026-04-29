@@ -27,6 +27,7 @@
     "pinia": "^2.1.7",
     "sharp": "^0.34.5",
     "tesseract.js": "^5.1.0",
+    "vosk-koffi": "^1.1.1",
     "vue": "^3.4.19",
     "vue-router": "^4.2.5"
   },
@@ -58,6 +59,19 @@
     },
     "files": [
       "dist"
+    ],
+    "extraResources": [
+      {
+        "from": "models/asr",
+        "to": "models/asr",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/vosk-koffi/**/*",
+      "node_modules/koffi/**/*"
     ],
     "win": {
       "target": "nsis",

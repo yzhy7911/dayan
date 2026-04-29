@@ -1,30 +1,9 @@
 <template>
   <header class="title-bar surface-panel">
     <div class="title-meta">
-      <div class="brand-lockup">
-        <div class="logo-mark">
-          <svg viewBox="0 0 28 28" fill="none">
-            <defs>
-              <linearGradient id="brandWave" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#14b8a6" />
-                <stop offset="55%" stop-color="#0f766e" />
-                <stop offset="100%" stop-color="#c2410c" />
-              </linearGradient>
-            </defs>
-            <rect x="2" y="2" width="24" height="24" rx="8" fill="url(#brandWave)" />
-            <path d="M8 10.2h9.2a2.6 2.6 0 0 1 2.6 2.6v3.6a2.6 2.6 0 0 1-2.6 2.6h-6.8l-2.9 2.9v-4.5a2.6 2.6 0 0 1 .5-7.2z" fill="rgba(255,255,255,0.96)" />
-            <circle cx="11.4" cy="14.2" r="1.1" fill="#0f766e" />
-            <circle cx="15.9" cy="14.2" r="1.1" fill="#c2410c" />
-          </svg>
-        </div>
-        <div class="brand-copy">
-          <div class="brand-title">搭言</div>
-          <div class="brand-subtitle">{{ currentPage.subtitle }}</div>
-        </div>
-      </div>
-      <div class="page-chip">
-        <span class="page-chip-dot"></span>
-        <span>{{ currentPage.label }}</span>
+      <div class="page-heading">
+        <div class="page-title">{{ currentPage.label }}</div>
+        <div class="page-subtitle">{{ currentPage.subtitle }}</div>
       </div>
     </div>
 
@@ -90,61 +69,24 @@ const close = () => {
   min-width: 0;
 }
 
-.brand-lockup {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
+.page-heading {
   min-width: 0;
 }
 
-.logo-mark {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-}
-
-.brand-copy {
-  min-width: 0;
-}
-
-.brand-title {
+.page-title {
   font-size: var(--font-xl);
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1;
   color: var(--text-primary);
 }
 
-.brand-subtitle {
+.page-subtitle {
   margin-top: 5px;
   font-size: var(--font-xs);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.page-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  font-size: var(--font-xs);
-  font-weight: 600;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.page-chip-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--secondary-light) 0%, var(--primary) 100%);
-  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
 }
 
 .window-actions {
@@ -184,10 +126,6 @@ const close = () => {
   border-color: transparent;
 }
 
-:global(.dark-theme) .page-chip {
-  background: rgba(255, 255, 255, 0.06);
-}
-
 :global(.dark-theme) .window-btn {
   background: rgba(255, 255, 255, 0.04);
 }
@@ -203,20 +141,11 @@ const close = () => {
   }
 
   .title-meta,
-  .brand-lockup {
+  .page-heading {
     gap: var(--space-2);
   }
 
-  .logo-mark {
-    width: 32px;
-    height: 32px;
-  }
-
-  .brand-subtitle {
-    display: none;
-  }
-
-  .page-chip {
+  .page-subtitle {
     display: none;
   }
 

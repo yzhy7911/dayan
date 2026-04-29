@@ -9,6 +9,7 @@ import { errorMonitor } from './error-monitor'
 import { windowDockManager } from './window-dock'
 import { ocrManager } from './ocr'
 import { shortcutManager } from './shortcuts'
+import { asrManager } from './asr'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -110,6 +111,7 @@ app.whenReady().then(async () => {
 
       // 数据存储使用 Dexie.js（IndexedDB），无需主进程处理
 
+      asrManager.registerIpc()
       createWindow()
 
       app.on('activate', () => {
@@ -127,10 +129,15 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   // 注销全局快捷键
   globalShortcut.unregisterAll()
+  asrManager.stopAllSessions()
 
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  asrManager.stopAllSessions()
 })
 
 // === Window IPC ===

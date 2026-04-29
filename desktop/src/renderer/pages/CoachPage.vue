@@ -16,6 +16,14 @@
       </div>
     </div>
 
+    <section class="coach-reason">
+      <div>
+        <p class="reason-kicker">Chat Coach</p>
+        <h1 class="reason-title">看懂对方真正想什么，再决定下一步怎么说。</h1>
+      </div>
+      <p class="reason-copy">适合关系推进、客户沟通和拉扯局面：整理聊天记录后，帮你判断意图、风险和可用策略。</p>
+    </section>
+
     <!-- 剪贴板监听模式栏 -->
     <div v-if="currentGoal" class="clipboard-monitor-bar" :class="{ active: isMonitorActive }">
       <span class="monitor-status">
@@ -43,116 +51,205 @@
       </div>
     </div>
 
-    <div v-if="currentGoal" class="history-sticky">
-      <div class="history-header">
-        <span @click="toggleHistory" style="cursor: pointer;">
-          历史记录 ({{ currentGoal.messages.length }})
-        </span>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <button
-            v-if="currentGoal.messages.length >= 2"
-            class="analyze-all-btn"
-            :disabled="isAnalyzingAll"
-            @click.stop="analyzeAllMessages"
-          >
-            {{ isAnalyzingAll ? '分析中...' : '整体分析' }}
-          </button>
-          <span class="toggle" @click="toggleHistory">{{ showHistory ? '▲' : '▼' }}</span>
-        </div>
-      </div>
-      <div v-show="showHistory" class="history-body">
-        <div v-for="msg in currentGoal.messages" :key="msg.timestamp" :class="['msg-wrapper', getMsgWrapperClass(msg.content)]">
-          <div class="msg-bubble">
-            <div class="msg-text">{{ extractMessageContent(msg.content) }}</div>
-          </div>
-        </div>
-        <div v-if="!currentGoal.messages.length" class="empty">暂无记录</div>
-      </div>
-    </div>
-
     <div v-if="currentGoal" class="content">
       <!-- 顶部技能选择器 -->
-      <div class="skill-selector">
-        <span class="skill-label">军师技能</span>
-        <select v-model="selectedSkill" class="skill-select">
-          <option value="">默认分析</option>
-          <option v-for="skill in availableSkills" :key="skill">{{ skill }}</option>
-        </select>
-      </div>
+      <section class="coach-workbench">
+        <div class="skill-selector">
+          <span class="skill-label">军师技能</span>
+          <select v-model="selectedSkill" class="skill-select">
+            <option value="">默认分析</option>
+            <option v-for="skill in availableSkills" :key="skill">{{ skill }}</option>
+          </select>
+          <button class="call-open-btn" @click="openCallPanel">
+            通话
+          </button>
+        </div>
 
-      <!-- 胜率 + 意图 合并卡片 -->
-      <div class="card status-card">
-        <div class="status-left">
-          <div class="card-title">胜率</div>
-          <div class="winrate-compact">
-            <span class="winrate-num">{{ latestAnalysis?.winRate || '--' }}%</span>
-            <div class="progress-small">
-              <div class="progress-bar" :style="{ width: (latestAnalysis?.winRate || 0) + '%' }"></div>
-            </div>
-          </div>
-          <div class="situation-compact">
-            <div class="good-tag">✓ {{ latestAnalysis?.advantages || '暂无' }}</div>
-            <div class="bad-tag">{{ latestAnalysis?.disadvantages || '暂无' }}</div>
+        <div class="coach-input-card">
+          <textarea v-model="inputText" placeholder="输入对方说的话..." rows="3" @keydown.ctrl.enter="sendMessage"></textarea>
+          <div class="input-footer">
+            <span>{{ selectedSkill || '默认分析' }}</span>
+            <button :disabled="!inputText.trim() || isSending" @click="sendMessage">
+              {{ isSending ? '分析中...' : '发送分析' }}
+            </button>
           </div>
         </div>
-        <div class="status-divider"></div>
-        <div class="status-right">
-          <div class="card-title">意图</div>
-          <div class="intent-list">
-            <div class="intent-item"><span class="intent-label">情绪</span><span class="orange">{{ latestAnalysis?.emotion || '--' }}</span></div>
-            <div class="intent-item"><span class="intent-label">真实</span><span class="red">{{ latestAnalysis?.realIntent || '--' }}</span></div>
-            <div class="intent-item"><span class="intent-label">需求</span><span>{{ latestAnalysis?.needs || '--' }}</span></div>
+      </section>
+
+      <div v-if="showCallPanel" class="call-panel">
+        <div class="call-head">
+          <div>
+            <div class="call-kicker">通话军师</div>
+            <div class="call-title">边转述，边拿到下一步建议</div>
           </div>
+          <span class="call-state-pill" :class="{ listening: isListeningSpeech, analyzing: isCallAnalyzing }">
+            {{ callStateText }}
+          </span>
+          <span class="call-asr-status" :class="{ ready: asrStatus?.available }">
+            {{ asrStatus?.available ? '本地离线' : '需本地识别库' }}
+          </span>
+          <button class="call-close-btn" @click="closeCallPanel">结束</button>
+        </div>
+
+        <div class="call-controls">
+          <div class="speaker-switch">
+            <button :class="{ active: callSpeaker === 'them' }" @click="callSpeaker = 'them'">对方说</button>
+            <button :class="{ active: callSpeaker === 'me' }" @click="callSpeaker = 'me'">我说</button>
+          </div>
+          <label class="auto-toggle">
+            <input v-model="callAutoAnalyze" type="checkbox" />
+            自动分析
+          </label>
+        </div>
+
+        <div v-if="callError" class="call-error">{{ callError }}</div>
+
+        <div class="call-live">
+          <span class="call-live-label">{{ isListeningSpeech ? '正在听' : '转写' }}</span>
+          <textarea
+            v-model="callTranscriptDraft"
+            rows="3"
+            placeholder="点击开始后，用语音转述对方说了什么；也可以直接在这里输入。"
+          ></textarea>
+        </div>
+
+        <div class="call-actions">
+          <button
+            v-if="!isListeningSpeech"
+            class="call-primary-btn"
+            :disabled="isStartingSpeech"
+            @click="startCallListening"
+          >
+            {{ isStartingSpeech ? '启动中...' : '开始听写' }}
+          </button>
+          <button
+            v-else
+            class="call-primary-btn active"
+            :disabled="isStoppingSpeech"
+            @click="stopCallListening"
+          >
+            {{ isStoppingSpeech ? '收尾中...' : '暂停听写' }}
+          </button>
+          <button class="call-secondary-btn" :disabled="!callTranscriptDraft.trim()" @click="commitCallDraft">
+            加入并分析
+          </button>
+        </div>
+
+        <div v-if="callRecentMessages.length" class="call-recent">
+          <div class="call-section-title">最近转述</div>
+          <div v-for="(item, idx) in callRecentMessages" :key="idx" class="call-recent-item">
+            <span>{{ item.isMe ? '我' : '对方' }}</span>
+            <p>{{ item.text }}</p>
+          </div>
+        </div>
+
+        <div class="call-suggestion">
+          <div class="call-section-title">当前建议</div>
+          <div v-if="isCallAnalyzing" class="call-muted">正在分析...</div>
+          <div v-else-if="latestAnalysis?.replies?.length" class="call-suggestion-text">
+            {{ latestAnalysis.replies[0].content }}
+          </div>
+          <div v-else class="call-muted">说完一段后，这里会出现推荐下一句。</div>
         </div>
       </div>
 
-      <!-- 策略建议 -->
-      <div class="card strategy">
-        <div class="card-title">策略建议</div>
-        <div class="strategy-split">
-          <div class="strategy-col">
-            <div class="col-title good">应该做</div>
-            <div class="strategy-list">
-              <div v-for="(item, idx) in (latestAnalysis?.shouldDo || [])" :key="idx" class="strategy-item">{{ item }}</div>
+      <div v-if="!hasLatestAnalysis" class="coach-result-empty">
+        <div class="result-empty-title">等待分析</div>
+        <div class="result-empty-copy">新的判断、策略和可发送话术会在这里汇总。</div>
+      </div>
+
+      <template v-else>
+        <!-- 胜率 + 意图 合并卡片 -->
+        <div class="card status-card">
+          <div class="status-left">
+            <div class="card-title">胜率</div>
+            <div class="winrate-compact">
+              <span class="winrate-num">{{ latestAnalysis?.winRate || '--' }}%</span>
+              <div class="progress-small">
+                <div class="progress-bar" :style="{ width: (latestAnalysis?.winRate || 0) + '%' }"></div>
+              </div>
+            </div>
+            <div class="situation-compact">
+              <div class="good-tag">✓ {{ latestAnalysis?.advantages || '暂无' }}</div>
+              <div class="bad-tag">{{ latestAnalysis?.disadvantages || '暂无' }}</div>
             </div>
           </div>
-          <div class="strategy-col">
-            <div class="col-title bad">不要做</div>
-            <div class="strategy-list">
-              <div v-for="(item, idx) in (latestAnalysis?.shouldNotDo || [])" :key="idx" class="strategy-item">{{ item }}</div>
+          <div class="status-divider"></div>
+          <div class="status-right">
+            <div class="card-title">意图</div>
+            <div class="intent-list">
+              <div class="intent-item"><span class="intent-label">情绪</span><span class="orange">{{ latestAnalysis?.emotion || '--' }}</span></div>
+              <div class="intent-item"><span class="intent-label">真实</span><span class="red">{{ latestAnalysis?.realIntent || '--' }}</span></div>
+              <div class="intent-item"><span class="intent-label">需求</span><span>{{ latestAnalysis?.needs || '--' }}</span></div>
             </div>
           </div>
         </div>
-        <div class="tone">建议语气：{{ latestAnalysis?.recommendedTone || '--' }}</div>
-      </div>
 
-      <!-- 推荐话术 -->
-      <div class="card replies">
-        <div class="card-title">推荐话术</div>
-        <div class="replies-list">
-          <div v-for="(reply, idx) in (latestAnalysis?.replies || [])" :key="idx" class="reply-item">
-            <div class="reply-header">
-              <span class="reply-num">{{ idx + 1 }}</span>
-              <span class="reply-style">{{ reply.style }}</span>
+        <!-- 策略建议 -->
+        <div class="card strategy">
+          <div class="card-title">策略建议</div>
+          <div class="strategy-split">
+            <div class="strategy-col">
+              <div class="col-title good">应该做</div>
+              <div class="strategy-list">
+                <div v-for="(item, idx) in (latestAnalysis?.shouldDo || [])" :key="idx" class="strategy-item">{{ item }}</div>
+              </div>
             </div>
-            <div class="reply-content">{{ reply.content }}</div>
-            <div class="reply-actions">
-              <button class="btn-copy" @click="copyReply(reply, idx)">复制</button>
-              <button class="btn-send" @click="sendReply(reply, idx)">发送</button>
+            <div class="strategy-col">
+              <div class="col-title bad">不要做</div>
+              <div class="strategy-list">
+                <div v-for="(item, idx) in (latestAnalysis?.shouldNotDo || [])" :key="idx" class="strategy-item">{{ item }}</div>
+              </div>
             </div>
           </div>
-          <div v-if="!latestAnalysis?.replies?.length" class="empty">暂无话术</div>
+          <div class="tone">建议语气：{{ latestAnalysis?.recommendedTone || '--' }}</div>
         </div>
-      </div>
-    </div>
 
-    <div v-if="currentGoal" class="input-area">
-      <textarea v-model="inputText" placeholder="输入对方说的话..." rows="3" @keydown.ctrl.enter="sendMessage"></textarea>
-      <div class="input-footer">
-        <span>Ctrl+Enter 发送</span>
-        <button :disabled="!inputText.trim() || isSending" @click="sendMessage">
-          {{ isSending ? '分析中...' : '发送分析' }}
-        </button>
+        <!-- 推荐话术 -->
+        <div class="card replies">
+          <div class="card-title">推荐话术</div>
+          <div class="replies-list">
+            <div v-for="(reply, idx) in (latestAnalysis?.replies || [])" :key="idx" class="reply-item">
+              <div class="reply-header">
+                <span class="reply-num">{{ idx + 1 }}</span>
+                <span class="reply-style">{{ reply.style }}</span>
+              </div>
+              <div class="reply-content">{{ reply.content }}</div>
+              <div class="reply-actions">
+                <button class="btn-copy" @click="copyReply(reply, idx)">复制</button>
+                <button class="btn-send" @click="sendReply(reply, idx)">发送</button>
+              </div>
+            </div>
+            <div v-if="!latestAnalysis?.replies?.length" class="empty">暂无话术</div>
+          </div>
+        </div>
+      </template>
+
+      <div class="history-sticky">
+        <div class="history-header" @click="toggleHistory">
+          <span>
+            历史记录 ({{ currentGoal.messages.length }})
+          </span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button
+              v-if="currentGoal.messages.length >= 2"
+              class="analyze-all-btn"
+              :disabled="isAnalyzingAll"
+              @click.stop="analyzeAllMessages"
+            >
+              {{ isAnalyzingAll ? '分析中...' : '整体分析' }}
+            </button>
+            <span class="toggle">{{ showHistory ? '▲' : '▼' }}</span>
+          </div>
+        </div>
+        <div v-show="showHistory" class="history-body">
+          <div v-for="msg in currentGoal.messages" :key="msg.timestamp" :class="['msg-wrapper', getMsgWrapperClass(msg.content)]">
+            <div class="msg-bubble">
+              <div class="msg-text">{{ extractMessageContent(msg.content) }}</div>
+            </div>
+          </div>
+          <div v-if="!currentGoal.messages.length" class="empty">暂无记录</div>
+        </div>
       </div>
     </div>
 
@@ -251,7 +348,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { CoachStorage } from '../utils/coach-storage'
 import { useToast } from '../composables/useToast'
@@ -282,6 +379,39 @@ const showHistory = ref(false)
 const showAnalysisModal = ref(false)
 const isAnalyzingAll = ref(false)
 const overallAnalysis = ref<any>({})
+const showCallPanel = ref(false)
+const isListeningSpeech = ref(false)
+const isStartingSpeech = ref(false)
+const isStoppingSpeech = ref(false)
+const callSpeaker = ref<'them' | 'me'>('them')
+const callAutoAnalyze = ref(true)
+const callTranscriptDraft = ref('')
+const callError = ref('')
+const callRecentMessages = ref<ChatItem[]>([])
+const isCallAnalyzing = ref(false)
+const pendingCallAnalysis = ref(false)
+const asrStatus = ref<any>(null)
+const callStateText = computed(() => {
+  if (isStoppingSpeech.value) return '收尾中'
+  if (isStartingSpeech.value) return '启动中'
+  if (isCallAnalyzing.value) return '分析中'
+  if (isListeningSpeech.value) return '正在听'
+  return '待开始'
+})
+const hasLatestAnalysis = computed(() => Boolean(
+  latestAnalysis.value?.winRate ||
+  latestAnalysis.value?.realIntent ||
+  latestAnalysis.value?.replies?.length
+))
+let localAsrSessionId = ''
+let callMediaStream: MediaStream | null = null
+let callAudioContext: AudioContext | null = null
+let callSourceNode: MediaStreamAudioSourceNode | null = null
+let callWorkletNode: AudioWorkletNode | null = null
+let callWorkletUrl = ''
+let isPushingAudio = false
+let pendingCallAudioBuffers: ArrayBuffer[] = []
+const maxPendingCallAudioBytes = 16000 * 2 * 8
 
 // 剪贴板监听相关
 const isMonitorActive = ref(false)
@@ -439,28 +569,47 @@ const analyzeAllMessages = async () => {
     isAnalyzingAll.value = false
   }
 }
+
+const buildGoalTextWithSkill = (): string => {
+  let goalText = currentGoal.value?.goal || ''
+  if (selectedSkill.value) {
+    const skill = getSkill(selectedSkill.value)
+    if (skill) {
+      goalText = `${goalText}\n\n【使用技能：${selectedSkill.value}】\n\n${skill.prompts.system}`
+    }
+  }
+  return goalText
+}
+
+const analyzeCurrentGoal = async (extraMessage?: { role: string; content: string }) => {
+  if (!currentGoal.value) return null
+
+  const history = currentGoal.value.messages.map((m: any) => ({ role: m.role, content: m.content }))
+  if (extraMessage) {
+    history.push(extraMessage)
+  }
+
+  const result = await (window as any).electronAPI?.ai?.analyzeIntent?.(history, buildGoalTextWithSkill())
+  if (result?.success === false && result?.error) {
+    toast.error('分析失败：' + result.error)
+    return null
+  }
+
+  if (result?.winRate) {
+    latestAnalysis.value = result
+  }
+
+  return result
+}
+
 const sendMessage = async () => {
   if (!inputText.value.trim() || !currentGoal.value || isSending.value) return
   isSending.value = true
   const userMessage = inputText.value.trim()
   inputText.value = ''
   try {
-    const history = currentGoal.value.messages.map((m: any) => ({ role: m.role, content: m.content }))
-    history.push({ role: 'user', content: userMessage })
-    let goalText = currentGoal.value.goal
-    if (selectedSkill.value) {
-      const skill = getSkill(selectedSkill.value)
-      if (skill) {
-        goalText = currentGoal.value.goal + '\n\n【使用技能：' + selectedSkill.value + '】\n\n' + skill.prompts.system
-      }
-    }
-    const result = await (window as any).electronAPI?.ai?.analyzeIntent?.(history, goalText)
-    if (result?.success === false && result?.error) {
-      toast.error('分析失败：' + result.error)
-      return
-    }
+    const result = await analyzeCurrentGoal({ role: 'user', content: userMessage })
     if (result?.winRate) {
-      latestAnalysis.value = result
       await CoachStorage.addMessage(currentGoal.value.id, { role: 'user', content: userMessage, timestamp: Date.now() })
       currentGoal.value.messages.push({ role: 'user', content: userMessage, timestamp: Date.now() })
     }
@@ -503,11 +652,356 @@ onMounted(async () => {
 onUnmounted(() => {
   // 停止监听
   stopMonitor()
+  stopCallMode()
 })
 
 onBeforeRouteLeave(() => {
   stopMonitor()
+  stopCallMode()
 })
+
+const openCallPanel = async () => {
+  showCallPanel.value = true
+  callError.value = ''
+  await refreshAsrStatus()
+  if (!asrStatus.value?.available) {
+    callError.value = buildAsrUnavailableMessage()
+  }
+}
+
+const closeCallPanel = () => {
+  stopCallMode()
+  showCallPanel.value = false
+}
+
+const refreshAsrStatus = async () => {
+  try {
+    asrStatus.value = await window.electronAPI?.asr?.status?.()
+  } catch (e: any) {
+    asrStatus.value = { available: false, error: e?.message || '本地识别状态检查失败' }
+  }
+}
+
+const buildAsrUnavailableMessage = () => {
+  if (!asrStatus.value?.modelReady) {
+    return '未找到本地语音模型，请确认模型放在 desktop/models/asr/vosk-cn-small。'
+  }
+  if (!asrStatus.value?.runtimeReady) {
+    return '本地语音识别运行库还没装好，可以先手动输入转述内容后分析。'
+  }
+  return asrStatus.value?.error || '本地语音识别暂不可用，可以先手动输入转述内容。'
+}
+
+const startCallListening = async () => {
+  if (isListeningSpeech.value || isStartingSpeech.value) return
+
+  isStartingSpeech.value = true
+  await refreshAsrStatus()
+  if (!asrStatus.value?.available) {
+    callError.value = buildAsrUnavailableMessage()
+    isStartingSpeech.value = false
+    return
+  }
+
+  await stopCallListening()
+
+  callError.value = ''
+  try {
+    callMediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        sampleRate: 16000,
+        sampleSize: 16,
+        autoGainControl: true,
+        echoCancellation: true,
+        noiseSuppression: true
+      }
+    })
+    callAudioContext = new AudioContext({ sampleRate: 16000 })
+    const startResult = await window.electronAPI?.asr?.start?.(16000)
+    if (!startResult?.success || !startResult.sessionId) {
+      throw new Error(startResult?.error || '本地语音识别启动失败')
+    }
+    localAsrSessionId = startResult.sessionId
+    callSourceNode = callAudioContext.createMediaStreamSource(callMediaStream)
+    callWorkletNode = await createCallAudioWorklet(callAudioContext)
+    callWorkletNode.port.onmessage = handleCallAudioWorkletMessage
+    callSourceNode.connect(callWorkletNode)
+    isListeningSpeech.value = true
+  } catch (e: any) {
+    console.error('启动本地语音识别失败:', e)
+    callError.value = getCallStartErrorMessage(e)
+    await stopCallListening()
+  } finally {
+    isStartingSpeech.value = false
+  }
+}
+
+const createCallAudioWorklet = async (audioContext: AudioContext) => {
+  if (!callWorkletUrl) {
+    const workletCode = `
+      class CallAudioCaptureProcessor extends AudioWorkletProcessor {
+        constructor() {
+          super()
+          this.buffers = []
+          this.size = 0
+          this.chunkSize = 4096
+        }
+
+        process(inputs) {
+          const input = inputs[0]
+          const channel = input && input[0]
+          if (!channel) return true
+
+          this.buffers.push(new Float32Array(channel))
+          this.size += channel.length
+
+          while (this.size >= this.chunkSize) {
+            const chunk = new Float32Array(this.chunkSize)
+            let offset = 0
+
+            while (offset < this.chunkSize && this.buffers.length) {
+              const first = this.buffers[0]
+              const needed = this.chunkSize - offset
+
+              if (first.length <= needed) {
+                chunk.set(first, offset)
+                offset += first.length
+                this.buffers.shift()
+              } else {
+                chunk.set(first.subarray(0, needed), offset)
+                this.buffers[0] = first.slice(needed)
+                offset += needed
+              }
+            }
+
+            this.size -= this.chunkSize
+            this.port.postMessage(chunk.buffer, [chunk.buffer])
+          }
+
+          return true
+        }
+      }
+
+      registerProcessor('call-audio-capture', CallAudioCaptureProcessor)
+    `
+    callWorkletUrl = URL.createObjectURL(new Blob([workletCode], { type: 'application/javascript' }))
+  }
+
+  await audioContext.audioWorklet.addModule(callWorkletUrl)
+  return new AudioWorkletNode(audioContext, 'call-audio-capture', {
+    numberOfInputs: 1,
+    numberOfOutputs: 0,
+    channelCount: 1
+  })
+}
+
+const getCallStartErrorMessage = (error: any) => {
+  const name = error?.name || ''
+  const message = error?.message || ''
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    return '麦克风权限被拒绝，请在系统设置里允许搭言使用麦克风。'
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return '没有检测到可用麦克风，请检查输入设备。'
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError') {
+    return '麦克风正被其他应用占用，请关闭占用后再试。'
+  }
+  return message || '本地语音识别启动失败，请稍后重试。'
+}
+
+const handleCallAudioWorkletMessage = (event: MessageEvent<ArrayBuffer>) => {
+  if (!localAsrSessionId) return
+
+  const input = new Float32Array(event.data)
+  const pcm = convertFloatTo16BitPCM(downsampleBuffer(input, callAudioContext?.sampleRate || 44100, 16000))
+  const audioBuffer = pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength) as ArrayBuffer
+  pendingCallAudioBuffers.push(audioBuffer)
+  trimPendingCallAudioQueue()
+  void flushCallAudioQueue()
+}
+
+const trimPendingCallAudioQueue = () => {
+  let totalBytes = pendingCallAudioBuffers.reduce((sum, buffer) => sum + buffer.byteLength, 0)
+  while (totalBytes > maxPendingCallAudioBytes && pendingCallAudioBuffers.length > 1) {
+    const removed = pendingCallAudioBuffers.shift()
+    totalBytes -= removed?.byteLength || 0
+  }
+}
+
+const flushCallAudioQueue = async () => {
+  if (!localAsrSessionId || isPushingAudio) return
+
+  isPushingAudio = true
+  try {
+    while (localAsrSessionId && pendingCallAudioBuffers.length) {
+      const chunks = pendingCallAudioBuffers.splice(0)
+      const result = await window.electronAPI?.asr?.pushAudio?.(localAsrSessionId, mergeArrayBuffers(chunks))
+      if (!result?.success) {
+        callError.value = result?.error || '本地语音识别失败'
+        return
+      }
+      if (result.isFinal && result.text?.trim()) {
+        callTranscriptDraft.value = result.text.trim()
+        await commitCallDraft()
+      } else if (result.partial?.trim()) {
+        callTranscriptDraft.value = result.partial.trim()
+      }
+    }
+  } catch (e: any) {
+    callError.value = e?.message || '本地语音识别失败'
+  } finally {
+    isPushingAudio = false
+  }
+}
+
+const mergeArrayBuffers = (buffers: ArrayBuffer[]) => {
+  if (buffers.length === 1) return buffers[0]
+
+  const totalLength = buffers.reduce((sum, buffer) => sum + buffer.byteLength, 0)
+  const merged = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buffer of buffers) {
+    merged.set(new Uint8Array(buffer), offset)
+    offset += buffer.byteLength
+  }
+  return merged.buffer
+}
+
+const waitForCallAudioIdle = async () => {
+  while (isPushingAudio) {
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+}
+
+const downsampleBuffer = (buffer: Float32Array, inputRate: number, outputRate: number) => {
+  if (outputRate === inputRate) return buffer
+  const sampleRateRatio = inputRate / outputRate
+  const newLength = Math.round(buffer.length / sampleRateRatio)
+  const result = new Float32Array(newLength)
+  let offsetResult = 0
+  let offsetBuffer = 0
+
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio)
+    let accum = 0
+    let count = 0
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+      accum += buffer[i]
+      count++
+    }
+    result[offsetResult] = accum / Math.max(count, 1)
+    offsetResult++
+    offsetBuffer = nextOffsetBuffer
+  }
+
+  return result
+}
+
+const convertFloatTo16BitPCM = (input: Float32Array) => {
+  const output = new Int16Array(input.length)
+  for (let i = 0; i < input.length; i++) {
+    const sample = Math.max(-1, Math.min(1, input[i]))
+    output[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff
+  }
+  return output
+}
+
+const stopCallListening = async (commitFinal = true) => {
+  if (isStoppingSpeech.value) return
+
+  isStoppingSpeech.value = true
+  try {
+    if (callWorkletNode) {
+      callWorkletNode.port.onmessage = null
+      callWorkletNode.disconnect()
+    }
+    callSourceNode?.disconnect()
+    callMediaStream?.getTracks().forEach(track => track.stop())
+    await callAudioContext?.close()
+    await waitForCallAudioIdle()
+    await flushCallAudioQueue()
+    await waitForCallAudioIdle()
+
+    if (localAsrSessionId) {
+      const result = await window.electronAPI?.asr?.stop?.(localAsrSessionId)
+      if (commitFinal && result?.text?.trim()) {
+        callTranscriptDraft.value = result.text.trim()
+        await commitCallDraft()
+      }
+    }
+  } catch (e) {
+    console.error('停止本地语音识别失败:', e)
+  } finally {
+    localAsrSessionId = ''
+    callMediaStream = null
+    callAudioContext = null
+    callSourceNode = null
+    callWorkletNode = null
+    isPushingAudio = false
+    isStartingSpeech.value = false
+    isStoppingSpeech.value = false
+    pendingCallAudioBuffers = []
+    isListeningSpeech.value = false
+  }
+}
+
+const stopCallMode = () => {
+  void stopCallListening(false)
+  callTranscriptDraft.value = ''
+  callError.value = ''
+}
+
+const commitCallDraft = async () => {
+  const text = callTranscriptDraft.value.trim()
+  if (!text || !currentGoal.value) return
+
+  callTranscriptDraft.value = ''
+  await appendCallMessage(text, callSpeaker.value === 'me')
+}
+
+const appendCallMessage = async (text: string, isMe: boolean) => {
+  if (!currentGoal.value) return
+
+  const message = {
+    role: isMe ? 'assistant' : 'user',
+    content: `${isMe ? '我说' : '对方说'}: ${text}`,
+    timestamp: Date.now()
+  }
+
+  await CoachStorage.addMessage(currentGoal.value.id, message)
+  currentGoal.value.messages.push(message)
+  callRecentMessages.value.unshift({ text, isMe })
+  callRecentMessages.value = callRecentMessages.value.slice(0, 5)
+
+  if (callAutoAnalyze.value) {
+    triggerCallAnalysis()
+  }
+}
+
+const triggerCallAnalysis = async () => {
+  if (!currentGoal.value) return
+
+  if (isCallAnalyzing.value) {
+    pendingCallAnalysis.value = true
+    return
+  }
+
+  isCallAnalyzing.value = true
+  try {
+    await analyzeCurrentGoal()
+  } catch (e: any) {
+    console.error('通话分析失败:', e)
+    toast.error('通话分析失败：' + (e.message || '未知错误'))
+  } finally {
+    isCallAnalyzing.value = false
+    if (pendingCallAnalysis.value) {
+      pendingCallAnalysis.value = false
+      triggerCallAnalysis()
+    }
+  }
+}
 
 // 剪贴板监听相关方法
 let clipboardPollingInterval: any = null
@@ -973,15 +1467,59 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
+.coach-reason {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(247, 241, 233, 0.78) 100%);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.reason-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.reason-title {
+  margin-top: 6px;
+  font-size: var(--font-lg);
+  line-height: 1.35;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.reason-copy {
+  max-width: 250px;
+  font-size: var(--font-xs);
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.coach-workbench {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(239, 250, 247, 0.9) 100%);
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
 /* 技能选择器 - 移到内容区顶部 */
 .skill-selector {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--bg-primary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-light);
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border: 0;
 }
 
 .skill-label {
@@ -1007,6 +1545,298 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
 .skill-select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-bg);
+}
+
+.call-open-btn {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--primary-gradient);
+  color: white;
+  font-size: var(--font-sm);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+.coach-input-card {
+  padding: var(--space-3);
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  border-radius: var(--radius-lg);
+}
+
+.coach-input-card textarea {
+  width: 100%;
+  min-height: 86px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--font-md);
+  line-height: 1.6;
+}
+
+.coach-input-card textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.call-panel {
+  padding: var(--space-4);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 241, 233, 0.88) 100%);
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-sm);
+}
+
+.call-head,
+.call-controls,
+.call-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.call-kicker,
+.call-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.call-title {
+  margin-top: 4px;
+  font-size: var(--font-md);
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.call-state-pill {
+  margin-left: auto;
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.call-state-pill.listening {
+  background: var(--primary-bg);
+  color: var(--primary-dark);
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.08);
+}
+
+.call-state-pill.analyzing {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.call-asr-status {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.call-asr-status.ready {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.call-close-btn,
+.call-secondary-btn {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.speaker-switch {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+}
+
+.speaker-switch button {
+  min-height: 28px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.speaker-switch button.active {
+  background: var(--primary-gradient);
+  color: white;
+}
+
+.auto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.call-error {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--font-xs);
+  line-height: 1.5;
+}
+
+.call-live {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+}
+
+.call-live-label {
+  display: block;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.call-live textarea {
+  width: 100%;
+  min-height: 76px;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  background: transparent;
+  color: var(--text-primary);
+  line-height: 1.55;
+  font-size: var(--font-sm);
+}
+
+.call-live textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.call-recent-item p {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.55;
+  font-size: var(--font-sm);
+}
+
+.call-primary-btn {
+  flex: 1;
+  min-height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--primary-gradient);
+  color: white;
+  font-size: var(--font-sm);
+  font-weight: 800;
+}
+
+.call-primary-btn.active {
+  background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary) 100%);
+}
+
+.call-primary-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.call-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.call-recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.call-recent-item {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.call-recent-item span {
+  display: inline-flex;
+  justify-content: center;
+  padding: 3px 0;
+  border-radius: var(--radius-sm);
+  background: var(--secondary-bg);
+  color: var(--secondary-dark);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.call-suggestion {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--success-bg) 0%, #dcfce7 100%);
+  border: 1px solid rgba(22, 163, 74, 0.18);
+}
+
+.call-suggestion-text {
+  margin-top: 8px;
+  color: var(--text-primary);
+  font-size: var(--font-md);
+  line-height: 1.55;
+  font-weight: 700;
+}
+
+.call-muted {
+  margin-top: 8px;
+  color: var(--text-tertiary);
+  font-size: var(--font-sm);
+}
+
+.coach-result-empty {
+  padding: var(--space-6) var(--space-4);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(247, 241, 233, 0.76) 100%);
+  border: 1px dashed rgba(15, 118, 110, 0.2);
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.result-empty-title {
+  font-size: var(--font-lg);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.result-empty-copy {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
 /* 整体分析按钮 */
@@ -1442,33 +2272,6 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
 .btn-copy:hover, .btn-send:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
-}
-
-/* 输入区域 */
-.input-area {
-  padding: var(--space-3) var(--space-4);
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border-light);
-  flex-shrink: 0;
-}
-
-.input-area textarea {
-  width: 100%;
-  padding: var(--space-3);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  font-size: var(--font-md);
-  resize: none;
-  outline: none;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  transition: all var(--transition);
-}
-
-.input-area textarea:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-bg);
-  background: var(--bg-primary);
 }
 
 .input-footer {
@@ -1937,8 +2740,7 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
 .top-bar,
 .clipboard-monitor-bar,
 .clipboard-toast,
-.history-sticky,
-.input-area {
+.history-sticky {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(247, 241, 233, 0.88) 100%);
   border: 1px solid rgba(255, 255, 255, 0.58);
   box-shadow: var(--shadow-sm);
@@ -1959,7 +2761,6 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
 
 .top-bar select,
 .skill-select,
-.input-area textarea,
 .modal input,
 .modal textarea {
   background: rgba(255, 255, 255, 0.74);
@@ -2063,12 +2864,6 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
   border-radius: 14px;
 }
 
-.input-area {
-  margin-top: auto;
-  border-radius: var(--radius-xl);
-  border: 1px solid rgba(255, 255, 255, 0.58);
-}
-
 .input-footer button:disabled {
   background: rgba(157, 143, 130, 0.4);
   box-shadow: none;
@@ -2110,7 +2905,8 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
 :global(.dark-theme) .clipboard-monitor-bar,
 :global(.dark-theme) .clipboard-toast,
 :global(.dark-theme) .history-sticky,
-:global(.dark-theme) .input-area,
+:global(.dark-theme) .coach-workbench,
+:global(.dark-theme) .call-panel,
 :global(.dark-theme) .card,
 :global(.dark-theme) .modal > div,
 :global(.dark-theme) .modal-content-large {

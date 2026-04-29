@@ -45,6 +45,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     testConnection: () => ipcRenderer.invoke('ai:testConnection')
   },
 
+  asr: {
+    status: () => ipcRenderer.invoke('asr:status'),
+    start: (sampleRate?: number) => ipcRenderer.invoke('asr:start', sampleRate),
+    pushAudio: (sessionId: string, audioData: ArrayBuffer) => ipcRenderer.invoke('asr:pushAudio', sessionId, audioData),
+    stop: (sessionId: string) => ipcRenderer.invoke('asr:stop', sessionId)
+  },
+
   shortcuts: {
     getConfig: () => ipcRenderer.invoke('shortcuts:getConfig'),
     setConfig: (config: any) => ipcRenderer.invoke('shortcuts:setConfig', config),
@@ -107,9 +114,42 @@ declare global {
         generateReply: (context: string, style: string, imageData?: string) => Promise<{ style: string; reply: string }[]>
         polishText: (text: string, style: string) => Promise<string[]>
         analyzeIntent: (chatHistory: any[], goal?: string) => Promise<any>
+        analyzeOverall: (chatHistory: any[], goal?: string) => Promise<any>
         testConnection: () => Promise<{ success: boolean; model?: string; error?: string }>
         setConfig: (config: any) => Promise<boolean>
         initConfig: (config: any) => Promise<boolean>
+      }
+      asr: {
+        status: () => Promise<{
+          available: boolean
+          modelReady: boolean
+          runtimeReady: boolean
+          modelPath: string
+          modelName: string
+          error?: string
+        }>
+        start: (sampleRate?: number) => Promise<{
+          success: boolean
+          sessionId?: string
+          sampleRate?: number
+          error?: string
+          available?: boolean
+          modelReady?: boolean
+          runtimeReady?: boolean
+          modelPath?: string
+        }>
+        pushAudio: (sessionId: string, audioData: ArrayBuffer) => Promise<{
+          success: boolean
+          isFinal?: boolean
+          text?: string
+          partial?: string
+          error?: string
+        }>
+        stop: (sessionId: string) => Promise<{
+          success: boolean
+          text?: string
+          error?: string
+        }>
       },
       shortcuts: {
         getConfig: () => Promise<any>
@@ -117,7 +157,7 @@ declare global {
         register: (accelerator: string, action: string) => Promise<boolean>
         unregister: (accelerator: string) => Promise<boolean>
         reset: () => Promise<any>
-      }
+      },
       on: (channel: string, callback: (...args: any[]) => void) => void
     }
   }

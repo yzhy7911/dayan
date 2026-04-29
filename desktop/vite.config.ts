@@ -21,7 +21,7 @@ export default defineConfig({
               sourcemap: true,
               outDir: 'dist/main',
               rollupOptions: {
-                external: ['node-machine-id', 'onnxruntime-node', 'sharp', 'paddleocr'],
+                external: ['node-machine-id', 'onnxruntime-node', 'sharp', 'paddleocr', 'vosk-koffi', 'koffi'],
                 output: {
                   dynamicRequireTargets: [
                     'node_modules/onnxruntime-node/**',

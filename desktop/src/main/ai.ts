@@ -285,8 +285,9 @@ const COACH_PROMPTS = {
 - 不要加解释或说明
 - 不要用 markdown 代码块
 - 不要用序号或列表
-- 只输出纯 JSON 对象`,
-    user: '请分析以下对话，给出完整的军师分析报告：{context}'
+- 只输出纯 JSON 对象
+- 第一个字符必须是 {，最后一个字符必须是 }`,
+    user: '只输出一个合法 JSON 对象，不要解释，不要 markdown。请分析以下对话，给出完整的军师分析报告：\n{context}'
   },
   overallAnalysis: {
     system: `你是一位顶级情感关系专家，擅长对整段聊天历史进行深度分析和总结。
@@ -603,6 +604,12 @@ class AIEngine {
           }
         } else {
           logger.error('AI', '未找到 JSON 对象')
+          const fallback = this.buildCoachFallbackFromText(result)
+          return {
+            ...fallback,
+            success: true,
+            parseWarning: '模型未返回 JSON，已使用文本兜底解析'
+          }
         }
       } catch (e: any) {
         logger.error('AI', 'JSON 处理失败:', e)
@@ -649,6 +656,63 @@ class AIEngine {
         ],
         error: e?.message || '分析失败，请检查网络连接'
       }
+    }
+  }
+
+  private buildCoachFallbackFromText(text: string): any {
+    const cleaned = text
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/#+\s*/g, '')
+      .trim()
+
+    const lines = cleaned
+      .split('\n')
+      .map(line => line.replace(/^[-*、\d.\s]+/, '').trim())
+      .filter(Boolean)
+
+    const pick = (patterns: RegExp[], fallback: string) => {
+      for (const pattern of patterns) {
+        const match = cleaned.match(pattern)
+        if (match?.[1]?.trim()) return match[1].trim().slice(0, 80)
+      }
+      return fallback
+    }
+
+    const winRateMatch = cleaned.match(/(\d{1,3})\s*%/)
+    const winRate = winRateMatch ? Math.max(0, Math.min(100, Number(winRateMatch[1]))) : 50
+    const replyLines = lines
+      .filter(line => !/(胜率|优势|劣势|意图|情绪|需求|风险|建议|不要|应该|语气)/.test(line))
+      .filter(line => line.length >= 4 && line.length <= 80)
+      .slice(-3)
+
+    return {
+      winRate,
+      advantages: pick([/优势[：:]\s*([^\n]+)/, /有利[：:]\s*([^\n]+)/], '已有对话上下文，可以继续观察ta的反馈'),
+      disadvantages: pick([/劣势[：:]\s*([^\n]+)/, /风险[：:]\s*([^\n]+)/], '信息还不够完整，避免过度解读'),
+      surfaceIntent: pick([/表面意图[：:]\s*([^\n]+)/, /表面[：:]\s*([^\n]+)/], 'ta在表达当前想法或状态'),
+      realIntent: pick([/真实意图[：:]\s*([^\n]+)/, /真实[：:]\s*([^\n]+)/], 'ta可能在试探你的反应'),
+      emotion: pick([/情绪[：:]\s*([^\n]+)/], '不确定'),
+      needs: pick([/需求[：:]\s*([^\n]+)/], '需要被理解和轻量回应'),
+      risks: pick([/风险[：:]\s*([^\n]+)/], '不要急着推进或追问'),
+      shouldDo: [
+        '先接住ta的情绪',
+        '回复短一点，别压迫',
+        '给对方留出余地'
+      ],
+      shouldNotDo: [
+        '不要连续追问',
+        '不要急着解释太多',
+        '不要强行推进关系'
+      ],
+      recommendedTone: '温和',
+      replies: (replyLines.length ? replyLines : [
+        '嗯，我明白你的意思，我先不急着说太多',
+        '那你先按自己的节奏来，我这边没关系',
+        '我懂，先别有压力，我们慢慢说'
+      ]).map((content, index) => ({
+        style: ['温和', '轻松', '稳妥'][index] || '温和',
+        content
+      }))
     }
   }
 
