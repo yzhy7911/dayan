@@ -1,7 +1,7 @@
 <template>
   <div class="contact-page">
     <!-- SVIP Banner -->
-    <div class="svip-banner">
+    <div class="svip-banner surface-panel">
       <div class="banner-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -9,10 +9,11 @@
         </svg>
       </div>
       <div class="banner-content">
+        <p class="banner-kicker">Contact Intelligence</p>
         <h3 class="banner-title">联系人画像</h3>
-        <p class="banner-desc">深度分析聊天记录，建立专属沟通档案</p>
+        <p class="banner-desc">沉淀聊天记录、识别沟通风格，并形成可复用的关系档案。</p>
       </div>
-      <button class="upgrade-btn">SVIP</button>
+      <button class="upgrade-btn">SVIP 权限</button>
     </div>
 
     <!-- 联系人列表 -->
@@ -20,9 +21,9 @@
       <div class="list-header">
         <h3 class="list-title">我的联系人</h3>
         <div class="header-actions">
-          <button v-if="contacts.length > 0" class="export-btn" @click="exportContacts">📤 导出</button>
-          <button class="import-btn" @click="triggerImport">📥 导入</button>
-          <button class="add-btn" @click="showAddModal = true">
+          <button v-if="contacts.length > 0" class="export-btn" @click="exportContacts">导出</button>
+          <button class="import-btn" @click="triggerImport">导入</button>
+          <button class="add-btn" @click="openAddContact">
             <span>+</span>
           </button>
         </div>
@@ -93,8 +94,8 @@
         <button class="back-btn" @click="selectedContact = null">‹</button>
         <h3 class="detail-title">{{ selectedContact.name }}</h3>
         <div class="detail-actions">
-          <button class="action-btn edit-btn" @click="editContact">✏️</button>
-          <button class="action-btn delete-btn" @click="confirmDeleteContact">🗑️</button>
+          <button class="action-btn edit-btn" @click="editContact">编辑</button>
+          <button class="action-btn delete-btn" @click="confirmDeleteContact">删除</button>
           <button class="analyze-btn" @click="analyzeContact" :disabled="isAnalyzing">
             {{ isAnalyzing ? '分析中...' : 'AI 分析' }}
           </button>
@@ -105,7 +106,7 @@
         <!-- 分析结果卡片 -->
         <div v-if="analysis" class="analysis-card">
           <div class="analysis-header">
-            <h4 class="analysis-title">🧠 画像分析</h4>
+            <h4 class="analysis-title">画像分析</h4>
             <span class="analysis-time">{{ formatTime(analysis.analyzedAt) }}</span>
           </div>
 
@@ -139,7 +140,7 @@
           </div>
 
           <div class="analysis-item">
-            <span class="analysis-label">⚠️ 避讳话题</span>
+            <span class="analysis-label">避讳话题</span>
             <div class="topic-tags">
               <span v-for="topic in analysis.tabooTopics" :key="topic" class="taboo-tag">
               {{ topic }}
@@ -148,7 +149,7 @@
           </div>
 
           <div class="analysis-item">
-            <span class="analysis-label">💡 沟通建议</span>
+            <span class="analysis-label">沟通建议</span>
             <ul class="suggestion-list">
               <li v-for="(s, i) in analysis.suggestions" :key="i">{{ s }}</li>
             </ul>
@@ -156,13 +157,13 @@
         </div>
 
         <div v-else class="no-analysis">
-          <div class="no-analysis-icon">🔍</div>
+          <div class="no-analysis-icon"></div>
           <p>点击右上角「AI 分析」生成画像</p>
         </div>
 
         <!-- 聊天记录区域 -->
         <div class="chat-section">
-          <h4 class="section-title">📝 聊天记录</h4>
+          <h4 class="section-title">聊天记录</h4>
 
           <div class="chat-input-area">
             <textarea
@@ -303,11 +304,6 @@ const filteredContacts = computed(() => {
   )
 })
 
-const newContact = ref({
-  name: '',
-  remark: '',
-  tagsStr: ''
-})
 const editingContact = ref({
   id: 0,
   name: '',
@@ -321,6 +317,17 @@ onMounted(async () => {
 
 async function loadContacts() {
   contacts.value = await ContactStorage.getContacts()
+}
+
+function openAddContact() {
+  isEditMode.value = false
+  editingContact.value = {
+    id: 0,
+    name: '',
+    remark: '',
+    tagsStr: ''
+  }
+  showAddModal.value = true
 }
 
 async function selectContact(contact: Contact) {
@@ -343,6 +350,11 @@ function editContact() {
 }
 
 async function saveContact() {
+  if (!editingContact.value.name.trim()) {
+    toast.error('请先填写联系人姓名')
+    return
+  }
+
   if (isEditMode.value && editingContact.value.id) {
     // 更新现有联系人
     await ContactStorage.updateContact(editingContact.value.id, {
@@ -354,13 +366,12 @@ async function saveContact() {
   } else {
     // 添加新联系人
     await ContactStorage.createContact(
-      newContact.value.name.trim(),
-      newContact.value.remark.trim()
+      editingContact.value.name.trim(),
+      editingContact.value.remark.trim()
     )
     toast.success('联系人已添加')
   }
 
-  newContact.value = { name: '', remark: '', tagsStr: '' }
   editingContact.value = { id: 0, name: '', remark: '', tagsStr: '' }
   showAddModal.value = false
   isEditMode.value = false
@@ -1305,5 +1316,399 @@ function formatTime(timestamp: number): string {
   color: #9ca3af;
   padding: 8px;
   margin: 0;
+}
+
+/* 设计升级覆盖 */
+.contact-page {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  animation: fadeIn 0.28s ease;
+}
+
+.svip-banner {
+  padding: var(--space-5);
+  gap: var(--space-4);
+  margin-bottom: 0;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(47, 107, 102, 0.14), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(179, 138, 99, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 243, 237, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+}
+
+.banner-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: var(--primary-gradient);
+  box-shadow: 0 18px 34px rgba(15, 118, 110, 0.18);
+}
+
+.banner-kicker {
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+.banner-title {
+  font-size: var(--font-xl);
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.banner-desc {
+  max-width: 560px;
+  font-size: var(--font-md);
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.upgrade-btn,
+.analyze-btn,
+.confirm-btn {
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--primary-gradient);
+  color: var(--text-inverse);
+  font-size: var(--font-sm);
+  font-weight: 700;
+  box-shadow: 0 14px 30px rgba(15, 118, 110, 0.18);
+  transition: all var(--transition);
+}
+
+.upgrade-btn:hover,
+.analyze-btn:hover:not(:disabled),
+.confirm-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 36px rgba(15, 118, 110, 0.24);
+}
+
+.contact-list-container,
+.contact-detail {
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 242, 234, 0.86) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(22px);
+}
+
+.list-header,
+.detail-header {
+  padding: 0 0 var(--space-4);
+  border-bottom: 1px solid rgba(72, 57, 41, 0.08);
+}
+
+.list-title,
+.detail-title,
+.analysis-title,
+.section-title,
+.modal-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.header-actions,
+.detail-actions,
+.chat-input-actions,
+.modal-actions {
+  gap: var(--space-3);
+}
+
+.export-btn,
+.import-btn,
+.cancel-btn,
+.action-btn,
+.back-btn,
+.add-chat-btn {
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  transition: all var(--transition);
+}
+
+.export-btn:hover,
+.import-btn:hover,
+.cancel-btn:hover,
+.action-btn:hover,
+.back-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--border-strong);
+}
+
+.add-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--primary-gradient);
+  box-shadow: 0 14px 28px rgba(15, 118, 110, 0.16);
+}
+
+.search-container {
+  padding: var(--space-4) 0;
+  border-bottom: none;
+}
+
+.search-input,
+.chat-textarea,
+.sender-select,
+.form-input {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  transition: all var(--transition);
+}
+
+.search-input:focus,
+.chat-textarea:focus,
+.sender-select:focus,
+.form-input:focus {
+  border-color: rgba(47, 107, 102, 0.32);
+  box-shadow: 0 0 0 4px rgba(47, 107, 102, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.contact-list {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0;
+}
+
+.contact-item {
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  transition: all var(--transition);
+}
+
+.contact-item:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow-sm);
+}
+
+.contact-avatar {
+  border-radius: var(--radius-lg);
+  background: var(--primary-gradient);
+  box-shadow: 0 14px 28px rgba(15, 118, 110, 0.16);
+}
+
+.contact-name,
+.analysis-value,
+.suggestion-list,
+.chat-record.contact .chat-bubble {
+  color: var(--text-primary);
+}
+
+.contact-remark,
+.contact-meta,
+.analysis-label,
+.analysis-time,
+.form-label,
+.delete-text,
+.empty-list,
+.no-records {
+  color: var(--text-secondary);
+}
+
+.tag,
+.topic-tag,
+.taboo-tag {
+  border-radius: var(--radius-full);
+  background: var(--primary-bg);
+  color: var(--primary-dark);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.taboo-tag {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.detail-content {
+  padding: var(--space-5) 0 0;
+}
+
+.analysis-card,
+.no-analysis,
+.chat-input-area,
+.import-list {
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.54);
+}
+
+.analysis-card {
+  margin-bottom: var(--space-5);
+}
+
+.analysis-item {
+  padding: var(--space-3) 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid rgba(72, 57, 41, 0.08);
+}
+
+.analysis-item:last-child {
+  border-bottom: none;
+}
+
+.no-analysis-icon {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto var(--space-3);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, rgba(47, 107, 102, 0.12) 0%, rgba(179, 138, 99, 0.12) 100%);
+  border: 1px solid rgba(47, 107, 102, 0.12);
+}
+
+.chat-section {
+  border-top: 1px solid rgba(72, 57, 41, 0.08);
+  padding-top: var(--space-5);
+}
+
+.chat-textarea {
+  min-height: 112px;
+  margin-bottom: var(--space-3);
+  resize: vertical;
+}
+
+.add-chat-btn {
+  background: var(--primary-gradient);
+  color: var(--text-inverse);
+  border-color: transparent;
+}
+
+.chat-records {
+  max-height: none;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.chat-record {
+  margin-bottom: 0;
+}
+
+.chat-bubble {
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.chat-record.me .chat-bubble {
+  background: var(--primary-gradient);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.chat-record.contact .chat-bubble {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.modal-overlay {
+  background: rgba(17, 14, 12, 0.36);
+  backdrop-filter: blur(8px);
+}
+
+.modal-content {
+  max-width: 420px;
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 242, 234, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(22px);
+}
+
+.modal-title {
+  text-align: left;
+}
+
+.delete-confirm {
+  background: linear-gradient(135deg, #c25a4f 0%, #9d3c34 100%);
+}
+
+:global(.dark-theme) .svip-banner {
+  background:
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.12), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(179, 138, 99, 0.1), transparent 24%),
+    linear-gradient(180deg, rgba(39, 32, 27, 0.96) 0%, rgba(25, 20, 17, 0.94) 100%);
+}
+
+:global(.dark-theme) .contact-list-container,
+:global(.dark-theme) .contact-detail,
+:global(.dark-theme) .modal-content {
+  background: var(--surface-main) !important;
+  border-color: var(--border-color) !important;
+  backdrop-filter: none;
+}
+
+:global(.dark-theme) .export-btn,
+:global(.dark-theme) .import-btn,
+:global(.dark-theme) .cancel-btn,
+:global(.dark-theme) .action-btn,
+:global(.dark-theme) .back-btn,
+:global(.dark-theme) .search-input,
+:global(.dark-theme) .chat-textarea,
+:global(.dark-theme) .sender-select,
+:global(.dark-theme) .form-input,
+:global(.dark-theme) .contact-item,
+:global(.dark-theme) .analysis-card,
+:global(.dark-theme) .no-analysis,
+:global(.dark-theme) .chat-input-area,
+:global(.dark-theme) .chat-record.contact .chat-bubble,
+:global(.dark-theme) .import-list {
+  background: var(--surface-muted) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary);
+}
+
+:global(.dark-theme) .search-input,
+:global(.dark-theme) .chat-textarea,
+:global(.dark-theme) .sender-select,
+:global(.dark-theme) .form-input {
+  background: var(--surface-control) !important;
+}
+
+@media (max-width: 760px) {
+  .svip-banner,
+  .list-header,
+  .detail-header,
+  .chat-input-actions,
+  .modal-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-actions,
+  .detail-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
 }
 </style>

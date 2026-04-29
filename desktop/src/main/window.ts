@@ -19,6 +19,8 @@ class WindowManager {
   }
 
   private startWechatTracking() {
+    if (this.dockInterval) return
+
     this.dockInterval = setInterval(() => {
       if (this.isDocked) {
         this.trackWechatWindow()
@@ -101,13 +103,25 @@ class WindowManager {
     return this.isDocked
   }
 
+  checkWeChat(): boolean {
+    return this.getWechatWindowRect() !== null
+  }
+
   isWindowDocked(): boolean {
     return this.isDocked
+  }
+
+  getDockStatus() {
+    return {
+      enabled: this.isDocked,
+      side: this.isDocked ? 'right' : null
+    }
   }
 
   destroy() {
     if (this.dockInterval) {
       clearInterval(this.dockInterval)
+      this.dockInterval = null
     }
   }
 }

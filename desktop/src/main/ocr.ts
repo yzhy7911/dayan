@@ -1,13 +1,7 @@
-import { BrowserWindow, clipboard, ipcMain, IpcMainInvokeEvent, nativeImage } from 'electron'
-import * as fs from 'fs'
-import * as path from 'path'
-import { app } from 'electron'
+import { clipboard, ipcMain, IpcMainInvokeEvent } from 'electron'
 
 class OCRManager {
-  private mainWindow: BrowserWindow | null = null
-
-  init(window: BrowserWindow) {
-    this.mainWindow = window
+  init() {
     this.setupIpcHandlers()
   }
 
@@ -74,14 +68,6 @@ class OCRManager {
         error: e instanceof Error ? e.message : '识别失败'
       }
     }
-  }
-
-  // 保存图片到临时文件（备用）
-  private saveImageToTemp(image: Electron.NativeImage): string {
-    const tempDir = app.getPath('temp')
-    const tempPath = path.join(tempDir, `ocr_temp_${Date.now()}.png`)
-    fs.writeFileSync(tempPath, image.toPNG())
-    return tempPath
   }
 }
 

@@ -12,10 +12,17 @@ import { shortcutManager } from './shortcuts'
 
 let mainWindow: BrowserWindow | null = null
 
+function safeHandle(channel: string, handler: Parameters<typeof ipcMain.handle>[1]) {
+  ipcMain.removeHandler(channel)
+  ipcMain.handle(channel, handler)
+}
+
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
 
-// 初始化错误监控和日志
-errorMonitor.init()
+// 延迟初始化错误监控
+setImmediate(() => {
+  errorMonitor.init()
+})
 
 function createWindow() {
   logger.info('Main', '🚀 创建主窗口...')
@@ -31,13 +38,14 @@ function createWindow() {
     resizable: true,
     alwaysOnTop: false,
     skipTaskbar: false,
+    show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,
+      webSecurity: true,
       sandbox: false,
-      allowRunningInsecureContent: true
+      allowRunningInsecureContent: false
     }
   })
 
@@ -53,24 +61,38 @@ function createWindow() {
     mainWindow.loadFile(join(__dirname, '../index.html'))
   }
 
+  // 页面准备好后再显示窗口，避免白屏闪烁
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show()
+    logger.info('Main', '✅ 窗口已显示')
+  })
+
   // 调试：页面加载完成事件
   mainWindow.webContents.on('did-finish-load', () => {
     logger.info('Main', '✅ 页面加载完成')
+
+    // 延迟初始化非关键模块，避免阻塞首屏
+    setImmediate(() => {
+      windowManager.init(mainWindow!)
+      clipboardManager.init(mainWindow!)
+      aiEngine.init()
+      shortcutManager.init(mainWindow!)
+
+      // macOS 窗口吸附到微信
+      if (process.platform === 'darwin') {
+        windowDockManager.init(mainWindow!)
+      }
+    })
+
+    // OCR 管理器最晚初始化（低优先级）
+    setTimeout(() => {
+      ocrManager.init()
+    }, 2000)
   })
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDesc) => {
     logger.error('Main', '❌ 页面加载失败:', { errorCode, errorDesc })
   })
-
-  windowManager.init(mainWindow)
-  clipboardManager.init(mainWindow)
-  aiEngine.init()
-  ocrManager.init(mainWindow)
-  shortcutManager.init(mainWindow)
-  // macOS 窗口吸附到微信
-  if (process.platform === 'darwin') {
-    windowDockManager.init(mainWindow)
-  }
 
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -125,74 +147,106 @@ app.on('window-all-closed', () => {
 })
 
 // === Window IPC ===
-ipcMain.handle('window:minimize', () => {
+safeHandle('window:minimize', () => {
   mainWindow?.minimize()
 })
 
-ipcMain.handle('window:close', () => {
+safeHandle('window:close', () => {
   mainWindow?.close()
 })
 
-ipcMain.handle('window:setAlwaysOnTop', (_, alwaysOnTop: boolean) => {
+safeHandle('window:setAlwaysOnTop', (_, alwaysOnTop: boolean) => {
   mainWindow?.setAlwaysOnTop(alwaysOnTop)
+})
+
+safeHandle('window:toggleDock', () => {
+  if (process.platform === 'darwin') {
+    return windowDockManager.toggleDock()
+  }
+
+  return windowManager.toggleDock()
+})
+
+safeHandle('window:checkWeChat', async () => {
+  if (process.platform === 'darwin') {
+    return windowDockManager.checkWeChat()
+  }
+
+  return windowManager.checkWeChat()
+})
+
+safeHandle('window:getDockStatus', async () => {
+  if (process.platform === 'darwin') {
+    return {
+      platform: process.platform,
+      ...windowDockManager.getDockStatus(),
+      wechatFound: await windowDockManager.checkWeChat()
+    }
+  }
+
+  return {
+    platform: process.platform,
+    ...windowManager.getDockStatus(),
+    wechatFound: windowManager.checkWeChat()
+  }
 })
 
 // === Clipboard IPC 已在 clipboard.ts 中注册 ===
 
 // === License IPC ===
-ipcMain.handle('license:verify', (_, key: string) => {
+safeHandle('license:verify', (_, key: string) => {
   return licenseManager.verifyLicense(key)
 })
 
-ipcMain.handle('license:getMachineId', () => {
+safeHandle('license:getMachineId', () => {
   return licenseManager.getMachineId()
 })
 
-ipcMain.handle('license:isActivated', () => {
+safeHandle('license:isActivated', () => {
   return licenseManager.isActivated()
 })
 
 // === AI IPC ===
-ipcMain.handle('ai:generateReply', (_, context, style) => {
+safeHandle('ai:generateReply', (_, context, style) => {
   return aiEngine.generateReply(context, style)
 })
 
-ipcMain.handle('ai:polishText', (_, text, style) => {
+safeHandle('ai:polishText', (_, text, style) => {
   return aiEngine.polishText(text, style)
 })
 
-ipcMain.handle('ai:analyzeIntent', (_, chatHistory, goal) => {
+safeHandle('ai:analyzeIntent', (_, chatHistory, goal) => {
   return aiEngine.analyzeIntent(chatHistory, goal)
 })
 
-ipcMain.handle('ai:analyzeOverall', (_, chatHistory, goal) => {
+safeHandle('ai:analyzeOverall', (_, chatHistory, goal) => {
   return aiEngine.analyzeOverall(chatHistory, goal)
 })
 
-ipcMain.handle('ai:setConfig', (_, config) => {
+safeHandle('ai:setConfig', (_, config) => {
   aiEngine.setConfig(config)
   return true
 })
 
-ipcMain.handle('ai:initConfig', (_, config) => {
+safeHandle('ai:initConfig', (_, config) => {
   aiEngine.setConfig(config)
   return true
 })
 
-ipcMain.handle('ai:testConnection', () => {
+safeHandle('ai:testConnection', () => {
   return aiEngine.testConnection()
 })
 
 // === Logger & Error Monitor IPC ===
-ipcMain.handle('logger:getLogFile', () => {
+safeHandle('logger:getLogFile', () => {
   return logger.getLogFile()
 })
 
-ipcMain.handle('logger:getErrorHistory', () => {
+safeHandle('logger:getErrorHistory', () => {
   return errorMonitor.getErrorHistory()
 })
 
-ipcMain.handle('logger:clearErrorHistory', () => {
+safeHandle('logger:clearErrorHistory', () => {
   errorMonitor.clearErrorHistory()
   return true
 })

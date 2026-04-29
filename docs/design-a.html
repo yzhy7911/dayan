@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=520, initial-scale=1.0">
+<title>设计A - Glass Pro 玻璃拟态</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0f0f11;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 32px 24px;
+    min-height: 100vh;
+    color: #e4e4e7;
+  }
+
+  .mockup-frame {
+    width: 480px;
+    min-height: 780px;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08);
+  }
+
+  /* === 顶部栏 === */
+  .titlebar {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    -webkit-app-region: drag;
+  }
+
+  .titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-mark {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: white;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+  }
+
+  .app-name {
+    font-size: 13px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #c7d2fe, #a5b4fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .titlebar-right {
+    display: flex;
+    gap: 4px;
+  }
+
+  .win-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.4);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .win-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
+  .win-btn.close:hover { background: #ef4444; color: white; }
+
+  /* === 侧边导航 === */
+  .layout {
+    display: flex;
+    height: calc(100% - 48px);
+  }
+
+  .sidebar {
+    width: 64px;
+    background: rgba(0,0,0,0.2);
+    border-right: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 4px;
+  }
+
+  .nav-item {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: rgba(255,255,255,0.35);
+    font-size: 9px;
+    font-weight: 500;
+    text-decoration: none;
+    border: none;
+    background: none;
+  }
+
+  .nav-item svg { width: 18px; height: 18px; stroke-width: 1.8; }
+
+  .nav-item:hover { color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.05); }
+
+  .nav-item.active {
+    color: #a5b4fc;
+    background: rgba(99,102,241,0.15);
+    box-shadow: 0 0 12px rgba(99,102,241,0.15);
+  }
+
+  .nav-spacer { flex: 1; }
+
+  /* === 主内容区 === */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .content::-webkit-scrollbar { width: 4px; }
+  .content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+  /* === 玻璃卡片 === */
+  .glass-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 18px;
+    backdrop-filter: blur(12px);
+    transition: all 0.25s;
+  }
+
+  .glass-card:hover {
+    border-color: rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.85);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title .icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+  }
+
+  .icon-input { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+  .icon-reply { background: linear-gradient(135deg, #10b981, #059669); }
+  .icon-style { background: linear-gradient(135deg, #f59e0b, #d97706); }
+
+  .card-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(99,102,241,0.15);
+    color: #a5b4fc;
+    font-weight: 500;
+  }
+
+  /* === 输入区域 === */
+  .input-area {
+    width: 100%;
+    min-height: 80px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 12px;
+    color: rgba(255,255,255,0.8);
+    font-size: 13px;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.2s;
+  }
+
+  .input-area:focus {
+    border-color: rgba(99,102,241,0.4);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+  }
+
+  .input-area::placeholder { color: rgba(255,255,255,0.2); }
+
+  /* === 风格选择 === */
+  .style-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .style-chip {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: rgba(255,255,255,0.5);
+  }
+
+  .style-chip:hover { border-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); }
+
+  .style-chip.active {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+  }
+
+  /* === 生成按钮 === */
+  .generate-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    box-shadow: 0 4px 15px rgba(99,102,241,0.3);
+    transition: all 0.25s;
+    font-family: inherit;
+  }
+
+  .generate-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(99,102,241,0.4);
+  }
+
+  /* === 回复卡片 === */
+  .reply-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    padding: 14px;
+    transition: all 0.25s;
+    cursor: pointer;
+  }
+
+  .reply-card:hover {
+    border-color: rgba(99,102,241,0.3);
+    background: rgba(99,102,241,0.05);
+    transform: translateY(-1px);
+  }
+
+  .reply-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .reply-index {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .reply-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(16,185,129,0.12);
+    color: #6ee7b7;
+    font-weight: 500;
+  }
+
+  .reply-text {
+    font-size: 13px;
+    line-height: 1.7;
+    color: rgba(255,255,255,0.75);
+    margin-bottom: 12px;
+  }
+
+  .reply-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .action-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-family: inherit;
+  }
+
+  .btn-copy {
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.5);
+  }
+
+  .btn-copy:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+
+  .btn-send {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    box-shadow: 0 2px 8px rgba(16,185,129,0.25);
+  }
+
+  .btn-send:hover { box-shadow: 0 4px 12px rgba(16,185,129,0.35); }
+
+  /* === 情绪/预警标签 === */
+  .insight-bar {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .insight-tag {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .tag-emotion {
+    background: rgba(139,92,246,0.12);
+    color: #c4b5fd;
+    border: 1px solid rgba(139,92,246,0.2);
+  }
+
+  .tag-warning {
+    background: rgba(245,158,11,0.12);
+    color: #fcd34d;
+    border: 1px solid rgba(245,158,11,0.2);
+  }
+
+  /* === 页面标签 === */
+  .page-label {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: rgba(255,255,255,0.25);
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    background: rgba(0,0,0,0.3);
+    padding: 4px 14px;
+    border-radius: 20px;
+  }
+
+  /* === 设置页 === */
+  .settings-group {
+    margin-bottom: 4px;
+  }
+
+  .group-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: rgba(255,255,255,0.25);
+    margin-bottom: 8px;
+    padding-left: 2px;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 10px;
+    margin-bottom: 4px;
+    transition: all 0.2s;
+  }
+
+  .setting-row:hover { background: rgba(255,255,255,0.05); }
+
+  .setting-label {
+    font-size: 13px;
+    color: rgba(255,255,255,0.75);
+  }
+
+  .setting-value {
+    font-size: 12px;
+    color: rgba(255,255,255,0.35);
+  }
+
+  .toggle {
+    width: 36px;
+    height: 20px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.1);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle.on { background: #6366f1; }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: white;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+  }
+
+  .toggle.on::after { transform: translateX(16px); }
+
+  /* === 话术卡片 === */
+  .script-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 14px;
+    transition: all 0.2s;
+  }
+
+  .script-card:hover {
+    border-color: rgba(99,102,241,0.2);
+  }
+
+  .script-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .script-keyword {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.85);
+  }
+
+  .script-category {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(99,102,241,0.12);
+    color: #a5b4fc;
+    font-weight: 500;
+  }
+
+  .script-content {
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.6;
+  }
+
+  .filter-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+
+  .filter-chip {
+    padding: 5px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.4);
+    transition: all 0.2s;
+  }
+
+  .filter-chip.active {
+    background: rgba(99,102,241,0.15);
+    border-color: rgba(99,102,241,0.3);
+    color: #a5b4fc;
+  }
+
+  /* === 搜索框 === */
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    margin-bottom: 14px;
+  }
+
+  .search-box svg { width: 16px; height: 16px; color: rgba(255,255,255,0.2); flex-shrink: 0; }
+
+  .search-box input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: rgba(255,255,255,0.8);
+    font-size: 13px;
+    font-family: inherit;
+  }
+
+  .search-box input::placeholder { color: rgba(255,255,255,0.2); }
+
+  .design-title {
+    text-align: center;
+    margin-bottom: 8px;
+    font-size: 18px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #c7d2fe, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .design-subtitle {
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+    margin-bottom: 20px;
+  }
+
+  .features-list {
+    margin-top: 16px;
+    padding: 16px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+  }
+
+  .feature-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #6366f1;
+    flex-shrink: 0;
+  }
+
+  .quick-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .quick-btn {
+    flex: 1;
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.03);
+    color: rgba(255,255,255,0.45);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-family: inherit;
+  }
+
+  .quick-btn:hover {
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.7);
+    border-color: rgba(255,255,255,0.1);
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 回复页 ===== -->
+<div style="display: flex; flex-direction: column; align-items: center;">
+  <div class="design-title">方案 A — Glass Pro</div>
+  <div class="design-subtitle">深色玻璃拟态 · 侧边导航 · 沉浸感</div>
+
+  <div class="mockup-frame" style="height: 780px;">
+    <div class="titlebar">
+      <div class="titlebar-left">
+        <div class="logo-mark">搭</div>
+        <span class="app-name">搭言</span>
+      </div>
+      <div class="titlebar-right">
+        <button class="win-btn">−</button>
+        <button class="win-btn close">×</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="sidebar">
+        <button class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>回复</span>
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <span>润色</span>
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span>军师</span>
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>人脉</span>
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <span>话术</span>
+        </button>
+        <div class="nav-spacer"></div>
+        <button class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>设置</span>
+        </button>
+      </div>
+
+      <div class="content">
+        <!-- 输入区 -->
+        <div class="glass-card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="icon icon-input" style="color:white;font-size:12px;">✎</div>
+              输入内容
+            </div>
+            <div class="quick-actions">
+              <button class="quick-btn">📡 监听</button>
+              <button class="quick-btn">📋 粘贴</button>
+            </div>
+          </div>
+          <textarea class="input-area" placeholder="粘贴微信聊天内容，AI 自动生成回复..." rows="3"></textarea>
+          <div class="insight-bar">
+            <span class="insight-tag tag-emotion">🎭 开心 82%</span>
+            <span class="insight-tag tag-warning">⚠️ 检测到转账关键词</span>
+          </div>
+        </div>
+
+        <!-- 风格选择 -->
+        <div class="glass-card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="icon icon-style" style="color:white;font-size:12px;">✦</div>
+              回复风格
+            </div>
+          </div>
+          <div class="style-row">
+            <span class="style-chip active">全部</span>
+            <span class="style-chip">友好</span>
+            <span class="style-chip">正式</span>
+            <span class="style-chip">幽默</span>
+            <span class="style-chip">简洁</span>
+            <span class="style-chip">共情</span>
+          </div>
+          <button class="generate-btn" style="margin-top: 14px;">✨ 生成回复</button>
+        </div>
+
+        <!-- 回复结果 -->
+        <div class="glass-card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="icon icon-reply" style="color:white;font-size:12px;">✉</div>
+              AI 推荐回复
+            </div>
+            <span class="card-badge">3 条</span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="reply-card">
+              <div class="reply-meta">
+                <span class="reply-index">1</span>
+                <span class="reply-tag">友好</span>
+              </div>
+              <div class="reply-text">哈哈，太好啦！我也觉得周末可以一起出来玩，你有什么想去的地方吗？</div>
+              <div class="reply-actions">
+                <button class="action-btn btn-copy">复制</button>
+                <button class="action-btn btn-send">发送到微信</button>
+              </div>
+            </div>
+
+            <div class="reply-card">
+              <div class="reply-meta">
+                <span class="reply-index">2</span>
+                <span class="reply-tag" style="background:rgba(139,92,246,0.12);color:#c4b5fd;">正式</span>
+              </div>
+              <div class="reply-text">好的，周末确实是个好时机。如果方便的话，我们可以约个时间详细聊聊。</div>
+              <div class="reply-actions">
+                <button class="action-btn btn-copy">复制</button>
+                <button class="action-btn btn-send">发送到微信</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-label">回复页</div>
+  </div>
+
+  <!-- 设计特点说明 -->
+  <div class="features-list" style="width: 480px; margin-top: 16px;">
+    <div class="feature-item"><span class="feature-dot"></span>深色玻璃拟态背景，沉浸感强</div>
+    <div class="feature-item"><span class="feature-dot"></span>侧边栏导航替代底部Tab，释放纵向空间</div>
+    <div class="feature-item"><span class="feature-dot"></span>Indigo紫主色调，科技感+高端感</div>
+    <div class="feature-item"><span class="feature-dot"></span>卡片半透明+毛玻璃边框，层次分明</div>
+    <div class="feature-item"><span class="feature-dot"></span>情绪/预警标签化，不占大片空间</div>
+    <div class="feature-item"><span class="feature-dot"></span>图标+小圆角方块替代Emoji标题，更专业</div>
+  </div>
+</div>
+
+</body>
+</html>

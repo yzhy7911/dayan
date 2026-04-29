@@ -11,6 +11,11 @@ export interface ReplyHistory {
   updatedAt: number
 }
 
+// 最大保存记录数，防止数据无限增长
+const MAX_HISTORY_COUNT = 500
+// 清理阈值：超过此数量时自动清理
+const CLEANUP_THRESHOLD = 600
+
 class HistoryDatabase extends Dexie {
   replyHistory!: Table<ReplyHistory>
 
@@ -41,7 +46,12 @@ export class HistoryStorage {
       createdAt: Date.now(),
       updatedAt: Date.now()
     }
-    return await historyDB.replyHistory.add(history)
+    const id = await historyDB.replyHistory.add(history)
+
+    // 异步清理超出限制的旧记录
+    this.autoCleanup()
+
+    return id
   }
 
   static async getHistory(limit: number = 50): Promise<ReplyHistory[]> {
@@ -51,10 +61,11 @@ export class HistoryStorage {
   }
 
   static async getFavorites(limit: number = 50): Promise<ReplyHistory[]> {
-    const allHistory = await historyDB.replyHistory.toArray()
-    const allFavorites = allHistory.filter(h => h.isFavorite)
-    allFavorites.sort((a, b) => b.createdAt - a.createdAt)
-    return allFavorites.slice(0, limit)
+    const allHistory = await historyDB.replyHistory
+      .filter(h => h.isFavorite)
+      .reverse()
+      .sortBy('createdAt')
+    return allHistory.slice(0, limit)
   }
 
   static async toggleFavorite(id: number): Promise<void> {
@@ -86,15 +97,34 @@ export class HistoryStorage {
       .sort((a, b) => b.createdAt - a.createdAt)
   }
 
+  /**
+   * 自动清理：保留收藏的记录，删除最旧的非收藏记录
+   */
+  private static autoCleanup(): void {
+    // 不阻塞主流程，异步执行
+    historyDB.replyHistory.count().then(count => {
+      if (count < CLEANUP_THRESHOLD) return
+
+      historyDB.replyHistory
+        .filter(h => !h.isFavorite)
+        .sortBy('createdAt')
+        .then(nonFavorites => {
+          const deleteCount = nonFavorites.length - (MAX_HISTORY_COUNT - (count - nonFavorites.length))
+          if (deleteCount > 0) {
+            const toDelete = nonFavorites.slice(0, deleteCount)
+            const ids = toDelete.map(h => h.id).filter((id): id is number => id !== undefined)
+            historyDB.replyHistory.bulkDelete(ids)
+            console.log(`[HistoryDB] 🧹 已清理 ${ids.length} 条旧记录`)
+          }
+        })
+        .catch(() => {
+          // 清理失败不影响使用
+        })
+    })
+  }
+
   static async init(): Promise<void> {
     try {
-      // 如果有旧版本数据库，先删除它
-      const oldDBs = await indexedDB.databases()
-      if (oldDBs.some(db => db.name === 'history-db' && (db.version || 1) < 2)) {
-        console.log('[HistoryDB] 检测到旧版本数据库，正在删除...')
-        indexedDB.deleteDatabase('history-db')
-      }
-
       await historyDB.open()
       console.log('[HistoryDB] ✅ 历史记录数据库初始化成功')
     } catch (error) {

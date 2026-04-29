@@ -1,67 +1,19 @@
-:root {
-  --primary: #10b981;
-  --primary-dark: #059669;
-  --primary-light: #34d399;
-  --primary-bg: rgba(16, 185, 129, 0.1);
-  --svip-start: #8b5cf6;
-  --svip-end: #6366f1;
-  --bg-primary: #ffffff;
-  --bg-secondary: #f9fafb;
-  --bg-tertiary: #f3f4f6;
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --text-tertiary: #9ca3af;
-  --border-color: #e5e7eb;
-  --border-light: #f3f4f6;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html, body {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
+html,
+body,
 #app {
   width: 100%;
   height: 100%;
-  background: var(--bg-primary);
-  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
 }
 
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+body {
+  min-width: 400px;
+  min-height: 700px;
 }
 
-::-webkit-scrollbar-track {
+#app {
+  position: relative;
   background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 2px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary);
 }
 
 button {
@@ -72,30 +24,455 @@ button {
   font-family: inherit;
 }
 
-input, textarea {
+input,
+textarea,
+select {
   border: none;
   outline: none;
   font-family: inherit;
 }
 
-.gradient-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-placeholder);
 }
 
-.gradient-svip {
-  background: linear-gradient(135deg, var(--svip-start) 0%, var(--svip-end) 100%);
+.gradient-primary {
+  background: var(--primary-gradient);
+}
+
+.gradient-secondary {
+  background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary) 100%);
 }
 
 .text-primary-gradient {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  background: var(--primary-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.text-svip-gradient {
-  background: linear-gradient(135deg, var(--svip-start) 0%, var(--svip-end) 100%);
+.text-secondary-gradient {
+  background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary-dark) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.surface-panel {
+  background: var(--surface-main);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.dark-theme .surface-panel {
+  background: var(--surface-main);
+  border-color: var(--border-color);
+}
+
+html.dark-theme .surface-panel {
+  background: var(--surface-main);
+  border-color: var(--border-color);
+}
+
+html.dark-theme input,
+html.dark-theme textarea,
+html.dark-theme select {
+  color: var(--text-primary);
+}
+
+.hero-status-item,
+.metric-tile,
+.shortcut-card,
+.style-stat-card,
+.stat-item,
+.license-status,
+.contact-item,
+.analysis-card,
+.no-analysis,
+.chat-input-area,
+.history-item,
+.input-panel,
+.reply-item,
+.knowledge-card,
+.insight-card,
+.insight-note,
+.format-card,
+.import-empty-card,
+.preview-item,
+.import-item,
+.result-card,
+.style-btn,
+.empty-state-card,
+.search-field,
+.toolbar-left {
+  background: var(--surface-muted);
+  border-color: var(--border-color);
+}
+
+.confidence-pill,
+.style-tag,
+.polish-tag,
+.knowledge-category {
+  border-color: var(--border-color);
+}
+
+.settings-hero,
+.settings-card,
+.about-card,
+.hero-panel,
+.composer-panel,
+.results-panel,
+.knowledge-hero,
+.control-panel,
+.library-panel,
+.insight-panel,
+.history-hero,
+.history-toolbar,
+.svip-banner,
+.contact-list-container,
+.contact-detail,
+.top-bar,
+.clipboard-monitor-bar,
+.clipboard-toast,
+.history-sticky,
+.input-area,
+.modal-content,
+.modal-content-large {
+  background: var(--surface-main) !important;
+  border-color: var(--border-color) !important;
+  backdrop-filter: none !important;
+}
+
+input,
+textarea,
+select,
+.form-input,
+.form-select,
+.form-textarea,
+.shortcut-input,
+.input-textarea,
+.search-input {
+  background-color: var(--surface-control);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+html.dark-theme .hero-status-item,
+html.dark-theme .metric-tile,
+html.dark-theme .shortcut-card,
+html.dark-theme .style-stat-card,
+html.dark-theme .stat-item,
+html.dark-theme .license-status,
+html.dark-theme .contact-item,
+html.dark-theme .analysis-card,
+html.dark-theme .no-analysis,
+html.dark-theme .chat-input-area,
+html.dark-theme .history-item,
+html.dark-theme .input-panel,
+html.dark-theme .reply-item,
+html.dark-theme .knowledge-card,
+html.dark-theme .insight-card,
+html.dark-theme .insight-note,
+html.dark-theme .format-card,
+html.dark-theme .import-empty-card,
+html.dark-theme .preview-item,
+html.dark-theme .import-item,
+html.dark-theme .result-card,
+html.dark-theme .style-btn,
+html.dark-theme .empty-state-card,
+html.dark-theme .search-field,
+html.dark-theme .toolbar-left {
+  background: var(--surface-muted) !important;
+  border-color: var(--border-color) !important;
+}
+
+html.dark-theme .settings-hero,
+html.dark-theme .settings-card,
+html.dark-theme .about-card,
+html.dark-theme .hero-panel,
+html.dark-theme .composer-panel,
+html.dark-theme .results-panel,
+html.dark-theme .knowledge-hero,
+html.dark-theme .control-panel,
+html.dark-theme .library-panel,
+html.dark-theme .insight-panel,
+html.dark-theme .history-hero,
+html.dark-theme .history-toolbar,
+html.dark-theme .svip-banner,
+html.dark-theme .contact-list-container,
+html.dark-theme .contact-detail,
+html.dark-theme .top-bar,
+html.dark-theme .clipboard-monitor-bar,
+html.dark-theme .clipboard-toast,
+html.dark-theme .history-sticky,
+html.dark-theme .input-area,
+html.dark-theme .modal-content,
+html.dark-theme .modal-content-large {
+  background: var(--surface-main) !important;
+  border-color: var(--border-color) !important;
+  backdrop-filter: none !important;
+}
+
+html.dark-theme input,
+html.dark-theme textarea,
+html.dark-theme select,
+html.dark-theme .form-input,
+html.dark-theme .form-select,
+html.dark-theme .form-textarea,
+html.dark-theme .shortcut-input,
+html.dark-theme .input-textarea,
+html.dark-theme .search-input {
+  background-color: var(--surface-control) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Dark mode material reset: keep every page on solid, readable layers. */
+html.dark-theme .title-bar,
+html.dark-theme .tab-rail,
+html.dark-theme .surface-panel,
+html.dark-theme .hero-panel,
+html.dark-theme .composer-panel,
+html.dark-theme .results-panel,
+html.dark-theme .workspace-panel,
+html.dark-theme .knowledge-hero,
+html.dark-theme .control-panel,
+html.dark-theme .library-panel,
+html.dark-theme .insight-panel,
+html.dark-theme .history-hero,
+html.dark-theme .history-toolbar,
+html.dark-theme .settings-hero,
+html.dark-theme .settings-card,
+html.dark-theme .about-card,
+html.dark-theme .svip-banner,
+html.dark-theme .contact-list-container,
+html.dark-theme .contact-detail,
+html.dark-theme .top-bar,
+html.dark-theme .clipboard-monitor-bar,
+html.dark-theme .clipboard-toast,
+html.dark-theme .history-sticky,
+html.dark-theme .input-area,
+html.dark-theme .modal > div,
+html.dark-theme .modal-shell,
+html.dark-theme .modal-content,
+html.dark-theme .modal-content-large,
+html.dark-theme .ocr-modal,
+html.dark-theme .onboarding-modal,
+html.dark-theme .toast {
+  background: var(--surface-main) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+  backdrop-filter: none !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.dark-theme .metric-tile,
+html.dark-theme .hero-stat-card,
+html.dark-theme .stat-tile,
+html.dark-theme .hero-status-item,
+html.dark-theme .shortcut-card,
+html.dark-theme .style-stat-card,
+html.dark-theme .stat-item,
+html.dark-theme .license-status,
+html.dark-theme .contact-item,
+html.dark-theme .analysis-card,
+html.dark-theme .no-analysis,
+html.dark-theme .chat-input-area,
+html.dark-theme .history-item,
+html.dark-theme .input-panel,
+html.dark-theme .reply-item,
+html.dark-theme .reply-card,
+html.dark-theme .knowledge-card,
+html.dark-theme .insight-card,
+html.dark-theme .insight-note,
+html.dark-theme .format-card,
+html.dark-theme .import-empty-card,
+html.dark-theme .preview-item,
+html.dark-theme .import-item,
+html.dark-theme .result-card,
+html.dark-theme .image-preview,
+html.dark-theme .image-preview-container,
+html.dark-theme .empty-state-card,
+html.dark-theme .empty-state,
+html.dark-theme .toolbar-left,
+html.dark-theme .search-field,
+html.dark-theme .category-chip,
+html.dark-theme .result-chip,
+html.dark-theme .panel-meta,
+html.dark-theme .style-btn:not(.active),
+html.dark-theme .action-chip.secondary,
+html.dark-theme .mini-btn:not(.primary),
+html.dark-theme .icon-action,
+html.dark-theme .icon-btn,
+html.dark-theme .message-item,
+html.dark-theme .check-line,
+html.dark-theme .import-list,
+html.dark-theme .chat-record.contact .chat-bubble {
+  background: var(--surface-muted) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+
+html.dark-theme .confidence-pill,
+html.dark-theme .style-tag:not(.all),
+html.dark-theme .polish-tag,
+html.dark-theme .knowledge-category {
+  background: var(--surface-control) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+
+html.dark-theme .page-chip,
+html.dark-theme .window-btn,
+html.dark-theme .export-btn,
+html.dark-theme .import-btn,
+html.dark-theme .cancel-btn,
+html.dark-theme .back-btn,
+html.dark-theme .btn-secondary,
+html.dark-theme .btn-copy,
+html.dark-theme .refresh-btn,
+html.dark-theme .parse-btn,
+html.dark-theme .modal-footer button:first-child,
+html.dark-theme .action-btn:not(.delete-btn),
+html.dark-theme .close-btn {
+  background: var(--surface-control) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+
+html.dark-theme .page-chip:hover,
+html.dark-theme .window-btn:hover,
+html.dark-theme .export-btn:hover,
+html.dark-theme .import-btn:hover,
+html.dark-theme .cancel-btn:hover,
+html.dark-theme .back-btn:hover,
+html.dark-theme .btn-secondary:hover,
+html.dark-theme .btn-copy:hover,
+html.dark-theme .refresh-btn:hover,
+html.dark-theme .parse-btn:hover,
+html.dark-theme .modal-footer button:first-child:hover,
+html.dark-theme .action-btn:not(.delete-btn):hover,
+html.dark-theme .close-btn:hover {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text-primary) !important;
+}
+
+html.dark-theme .tab-item:hover {
+  background: var(--surface-muted) !important;
+  color: var(--text-primary) !important;
+}
+
+html.dark-theme .tab-item.active {
+  background: var(--surface-control) !important;
+  color: var(--text-primary) !important;
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.28), 0 14px 28px rgba(0, 0, 0, 0.18) !important;
+}
+
+html.dark-theme .tab-item.active .tab-icon,
+html.dark-theme .tab-item.active .tab-label {
+  color: var(--primary) !important;
+}
+
+html.dark-theme .style-btn.active,
+html.dark-theme .category-chip.active,
+html.dark-theme .mode-btn.active,
+html.dark-theme .action-chip.active,
+html.dark-theme .btn-primary,
+html.dark-theme .generate-btn,
+html.dark-theme .polish-btn,
+html.dark-theme .upgrade-btn,
+html.dark-theme .analyze-btn,
+html.dark-theme .confirm-btn,
+html.dark-theme .btn-paste,
+html.dark-theme .btn-send,
+html.dark-theme .mini-btn.primary,
+html.dark-theme .modal-footer button:last-child {
+  background: var(--primary-gradient) !important;
+  border-color: transparent !important;
+  color: var(--text-inverse) !important;
+}
+
+html.dark-theme .close-btn:hover,
+html.dark-theme .window-btn.close-btn:hover,
+html.dark-theme .delete-btn:hover,
+html.dark-theme .btn-danger,
+html.dark-theme .modal-footer .danger {
+  background: linear-gradient(135deg, #ef4444 0%, #991b1b 100%) !important;
+  border-color: transparent !important;
+  color: #fff7ed !important;
+}
+
+html.dark-theme input,
+html.dark-theme textarea,
+html.dark-theme select,
+html.dark-theme .form-input,
+html.dark-theme .form-select,
+html.dark-theme .form-textarea,
+html.dark-theme .shortcut-input,
+html.dark-theme .input-textarea,
+html.dark-theme .raw-textarea,
+html.dark-theme .search-input,
+html.dark-theme .chat-textarea,
+html.dark-theme .sender-select,
+html.dark-theme .skill-select,
+html.dark-theme .top-bar select,
+html.dark-theme .modal input,
+html.dark-theme .modal textarea {
+  background: var(--surface-control) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+html.dark-theme input:focus,
+html.dark-theme textarea:focus,
+html.dark-theme select:focus,
+html.dark-theme .form-input:focus,
+html.dark-theme .form-select:focus,
+html.dark-theme .form-textarea:focus,
+html.dark-theme .shortcut-input:focus,
+html.dark-theme .input-textarea:focus,
+html.dark-theme .raw-textarea:focus,
+html.dark-theme .search-input:focus,
+html.dark-theme .chat-textarea:focus,
+html.dark-theme .sender-select:focus,
+html.dark-theme .skill-select:focus {
+  background: var(--bg-elevated) !important;
+  border-color: rgba(45, 212, 191, 0.34) !important;
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.12) !important;
+}
+
+html.dark-theme .reply-content,
+html.dark-theme .result-content,
+html.dark-theme .knowledge-content,
+html.dark-theme .input-text,
+html.dark-theme .reply-text,
+html.dark-theme .msg-content,
+html.dark-theme .contact-name,
+html.dark-theme .analysis-value,
+html.dark-theme .modal-title,
+html.dark-theme .panel-title,
+html.dark-theme .hero-title,
+html.dark-theme .section-title,
+html.dark-theme .list-title,
+html.dark-theme .detail-title {
+  color: var(--text-primary) !important;
+}
+
+html.dark-theme .banner-desc,
+html.dark-theme .hero-desc,
+html.dark-theme .empty-text,
+html.dark-theme .note-text,
+html.dark-theme .preview-content,
+html.dark-theme .preview-more,
+html.dark-theme .delete-text,
+html.dark-theme .select-info,
+html.dark-theme .stat-label,
+html.dark-theme .metric-label,
+html.dark-theme .panel-label {
+  color: var(--text-secondary) !important;
 }

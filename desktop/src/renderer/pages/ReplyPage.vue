@@ -1,24 +1,42 @@
 <template>
   <div class="reply-page">
-    <!-- 输入区域 -->
-    <div class="section">
-      <div class="section-header">
-        <h3 class="section-title">📝 输入内容</h3>
-        <div class="header-actions">
-          <button
-            class="listen-btn"
-            :class="{ active: isListening }"
-            @click="toggleListening"
-          >
-            {{ isListening ? '🔴 监听中' : '📡 监听剪贴板' }}
+    <section class="hero-panel surface-panel">
+      <div class="hero-copy">
+        <p class="hero-eyebrow">Reply Studio</p>
+        <h1 class="hero-title">难回的话，整理成可发送版本。</h1>
+      </div>
+      <div class="hero-metrics">
+        <div class="metric-tile">
+          <span class="metric-label">监听</span>
+          <span class="metric-value">{{ isListening ? '开启' : '关闭' }}</span>
+        </div>
+        <div class="metric-tile">
+          <span class="metric-label">风格</span>
+          <span class="metric-value">{{ getStyleLabel(selectedStyle).replace('风格', '') }}</span>
+        </div>
+        <div class="metric-tile">
+          <span class="metric-label">结果</span>
+          <span class="metric-value">{{ replies.length }} 条</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="composer-panel surface-panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-kicker">输入区</div>
+          <h3 class="panel-title">贴聊天、截图或要回复的内容</h3>
+        </div>
+        <div class="head-actions">
+          <button class="action-chip" :class="{ active: isListening }" @click="toggleListening">
+            {{ isListening ? '停止' : '监听' }}
           </button>
-          <button class="quick-paste-btn" @click="pasteFromClipboard">
-            📋 粘贴
+          <button class="action-chip secondary" @click="pasteFromClipboard">
+            粘贴
           </button>
         </div>
       </div>
 
-      <!-- 图片预览区 -->
       <div v-if="pastedImage" class="image-preview-container">
         <img :src="pastedImage" class="pasted-image" alt="粘贴的图片" />
         <button class="remove-image-btn" @click="removeImage">×</button>
@@ -27,31 +45,29 @@
       <textarea
         v-model="inputText"
         class="input-textarea"
-        placeholder="粘贴微信聊天内容或截图，AI 自动生成回复..."
-        rows="4"
+        placeholder="粘贴聊天内容，或描述当前局面..."
+        rows="5"
         @paste="handlePaste"
       ></textarea>
 
-      <!-- 情绪识别提示 -->
-      <div v-if="detectedEmotion" class="emotion-detected">
-        <span class="emotion-icon">🎭</span>
-        <span class="emotion-text">
-          检测到情绪：<strong>{{ detectedEmotion }}</strong> ({{ Math.round(emotionConfidence * 100) }}%)
-        </span>
-        <button class="emotion-apply-btn" @click="applyEmotionStyle">
-          应用推荐风格
-        </button>
+      <div v-if="detectedEmotion" class="signal-row emotion-row">
+        <div class="signal-copy">
+          <span class="signal-label">情绪信号</span>
+          <span class="signal-text">{{ detectedEmotion }} · {{ Math.round(emotionConfidence * 100) }}%</span>
+        </div>
+        <button class="signal-btn" @click="applyEmotionStyle">应用推荐风格</button>
       </div>
 
-      <!-- 反诈预警提示 -->
-      <div v-if="scamWarning" class="scam-warning" :class="scamWarning.level">
-        <span class="scam-icon">{{ scamWarning.level === 'high' ? '🚨' : '⚠️' }}</span>
-        <span class="scam-text">{{ scamWarning.message }}</span>
-        <span class="scam-confidence">置信度: {{ Math.round(scamWarning.confidence * 100) }}%</span>
+      <div v-if="scamWarning" class="signal-row" :class="scamWarning.level === 'high' ? 'risk-high' : 'risk-medium'">
+        <div class="signal-copy">
+          <span class="signal-label">{{ scamWarning.level === 'high' ? '高风险提醒' : '风险提醒' }}</span>
+          <span class="signal-text">{{ scamWarning.message }}</span>
+        </div>
+        <span class="confidence-pill">置信度 {{ Math.round(scamWarning.confidence * 100) }}%</span>
       </div>
 
       <div class="style-selector">
-        <span class="style-label">回复风格：</span>
+        <span class="style-label">风格模式</span>
         <div class="style-buttons">
           <button
             v-for="style in styles"
@@ -70,19 +86,21 @@
         :disabled="!inputText.trim() || isGenerating"
         @click="generateReply"
       >
-        <span v-if="isGenerating">⏳ 生成中...</span>
-        <span v-else>✨ 生成回复</span>
+        <span v-if="isGenerating">正在生成回复…</span>
+        <span v-else>生成回复</span>
       </button>
-    </div>
+    </section>
 
-    <!-- 结果区域 -->
-    <div class="section" v-if="replies.length > 0">
-      <div class="section-header">
-        <h3 class="section-title">💡 AI 推荐回复</h3>
-        <span class="result-count">{{ replies.length }} 条</span>
+    <section class="results-panel surface-panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-kicker">输出区</div>
+          <h3 class="panel-title">候选回复</h3>
+        </div>
+        <span class="result-count" v-if="replies.length > 0">{{ replies.length }} 条结果</span>
       </div>
 
-      <div class="replies-list">
+      <div class="replies-list" v-if="replies.length > 0">
         <div
           v-for="(reply, index) in replies"
           :key="index"
@@ -97,31 +115,36 @@
           <div class="reply-content">{{ reply.reply }}</div>
           <div class="reply-actions">
             <button class="btn-copy" @click="copyReply(reply.reply)">
-              📋 复制
+              复制
             </button>
             <button class="btn-paste" @click="pasteReply(reply.reply)">
-              🚀 发送到微信
+              发送到微信
             </button>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 提示：未配置 API -->
-    <div class="section" v-if="!hasAPIKey() && replies.length === 0">
-      <div class="empty-tip">
-        <span class="tip-icon">⚙️</span>
-        <p class="tip-text">请先到「设置」页面配置你的 AI API Key</p>
+      <div class="empty-state-card" v-else-if="!hasAPIKey()">
+        <span class="empty-badge">未配置模型</span>
+        <p class="empty-text">先完成 API 配置，回复工作台才会开始生成内容。</p>
         <button class="btn-go-settings" @click="goToSettings">
-          去配置 →
+          前往设置
         </button>
       </div>
-    </div>
+
+      <div class="empty-state-card muted" v-else>
+        <span class="empty-badge">等待输入</span>
+        <p class="empty-text">输入一段对话或贴一张截图，结果会出现在这里。</p>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+
+// 组件名称，用于 keep-alive 缓存
+defineOptions({ name: 'Reply' })
 import { useRouter } from 'vue-router'
 import { hasAPIKey } from '../utils/storage'
 import { HistoryStorage } from '../utils/history-storage'
@@ -148,24 +171,24 @@ const emotionSuggestions = ref<string[]>([])
 const scamWarning = ref<ReturnType<typeof ScamDetector.analyze>>(null)
 
 const styles = [
-  { value: 'all', label: '✨ 全部风格' },
-  { value: 'friendly', label: '💬 友好' },
-  { value: 'formal', label: '💼 正式' },
-  { value: 'humorous', label: '😄 幽默' },
-  { value: 'concise', label: '⚡ 简洁' },
-  { value: 'empathetic', label: '💝 共情' }
+  { value: 'all', label: '全部风格' },
+  { value: 'friendly', label: '友好' },
+  { value: 'formal', label: '正式' },
+  { value: 'humorous', label: '幽默' },
+  { value: 'concise', label: '简洁' },
+  { value: 'empathetic', label: '共情' }
 ]
 
 const getStyleLabel = (style: string): string => {
   const styleMap: Record<string, string> = {
-    all: '✨ 全部风格',
-    friendly: '💬 友好风格',
-    formal: '💼 正式风格',
-    humorous: '😄 幽默风格',
-    concise: '⚡ 简洁风格',
-    empathetic: '💝 共情风格'
+    all: '全部风格',
+    friendly: '友好风格',
+    formal: '正式风格',
+    humorous: '幽默风格',
+    concise: '简洁风格',
+    empathetic: '共情风格'
   }
-  return styleMap[style] || '✨ 默认风格'
+  return styleMap[style] || '默认风格'
 }
 
 onMounted(() => {
@@ -332,7 +355,7 @@ const generateReply = async () => {
 
     if (result && result.length > 0) {
       replies.value = result
-      console.log(`[Reply] ✅ 生成了 ${result.length} 条回复，风格:`, result.map(r => r.style))
+      console.log(`[Reply] 生成了 ${result.length} 条回复，风格:`, result.map(r => r.style))
     } else {
       // 兜底：如果 API 没返回，显示引导
       replies.value = [
@@ -347,7 +370,7 @@ const generateReply = async () => {
       ]
     }
   } catch (e) {
-    console.error('[Reply] ❌ 生成失败:', e)
+    console.error('[Reply] 生成失败:', e)
     replies.value = [
       {
         style: 'friendly',
@@ -396,119 +419,143 @@ const goToSettings = () => {
 <style scoped>
 .reply-page {
   min-height: 100%;
-  padding: var(--space-4);
-  background: var(--bg-secondary);
-  transition: background var(--transition);
-}
-
-.section {
-  background: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
-  box-shadow: var(--shadow-sm);
-  transition: all var(--transition);
-}
-
-.section-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-4);
+  animation: fadeIn 0.28s ease;
 }
 
-.header-actions {
+.hero-panel,
+.composer-panel,
+.results-panel {
+  padding: var(--space-5);
+}
+
+.hero-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background:
+    radial-gradient(circle at top right, rgba(20, 184, 166, 0.16), transparent 26%),
+    radial-gradient(circle at bottom left, rgba(194, 65, 12, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(247, 241, 233, 0.9) 100%);
+}
+
+.hero-eyebrow,
+.panel-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.hero-title,
+.panel-title {
+  margin-top: 8px;
+  font-size: var(--font-xl);
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.metric-tile {
+  min-width: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.64);
+}
+
+.metric-label {
+  display: block;
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+}
+
+.metric-value {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.head-actions {
   display: flex;
   gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
-.listen-btn {
-  padding: var(--space-1) var(--space-3);
-  background: var(--warning-bg);
-  color: var(--warning);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: var(--radius-sm);
+.action-chip {
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
   font-size: var(--font-xs);
-  font-weight: 500;
-  cursor: pointer;
+  font-weight: 700;
+  background: var(--primary-gradient);
+  color: var(--text-inverse);
+  box-shadow: 0 14px 28px rgba(15, 118, 110, 0.14);
   transition: all var(--transition);
 }
 
-.listen-btn:hover {
-  background: rgba(245, 158, 11, 0.15);
-}
-
-.listen-btn.active {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  border-color: transparent;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-.section-title {
-  font-size: var(--font-lg);
-  font-weight: 600;
+.action-chip.secondary {
+  background: rgba(255, 255, 255, 0.75);
   color: var(--text-primary);
-  margin: 0;
+  border: 1px solid var(--border-color);
+  box-shadow: none;
 }
 
-.quick-paste-btn {
-  padding: var(--space-1) var(--space-3);
-  background: var(--primary-bg);
-  color: var(--primary);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-xs);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.quick-paste-btn:hover {
-  background: rgba(16, 185, 129, 0.15);
+.action-chip.active {
+  background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary) 100%);
 }
 
 .image-preview-container {
   position: relative;
-  margin-bottom: var(--space-3);
-  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-xl);
   overflow: hidden;
-  border: 2px dashed var(--border-color);
-  transition: all var(--transition);
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.66);
 }
 
 .pasted-image {
   width: 100%;
-  max-height: 200px;
+  max-height: 220px;
   object-fit: contain;
   display: block;
 }
 
 .remove-image-btn {
   position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  width: 28px;
-  height: 28px;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
-  border: none;
-  border-radius: var(--radius-full);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 10px;
+  background: rgba(31, 27, 22, 0.78);
+  color: white;
+  font-size: 18px;
   transition: all var(--transition);
 }
 
@@ -516,17 +563,13 @@ const goToSettings = () => {
   background: var(--error);
 }
 
-.result-count {
-  font-size: var(--font-xs);
-  color: var(--text-secondary);
-}
-
 .input-textarea {
   width: 100%;
-  padding: var(--space-3);
-  background: var(--bg-secondary);
+  min-height: 150px;
+  padding: var(--space-4);
+  background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl);
   font-size: var(--font-md);
   color: var(--text-primary);
   resize: none;
@@ -535,106 +578,77 @@ const goToSettings = () => {
 }
 
 .input-textarea:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-bg);
+  border-color: rgba(15, 118, 110, 0.5);
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+  background: rgba(255, 255, 255, 0.94);
 }
 
-.emotion-detected {
+.signal-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  background: var(--secondary-bg);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--secondary);
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
   flex-wrap: wrap;
 }
 
-.emotion-icon {
-  font-size: var(--font-xl);
+.emotion-row {
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(124, 58, 237, 0.18);
 }
 
-.emotion-text {
-  font-size: var(--font-sm);
-  color: var(--text-primary);
-}
-
-.emotion-text strong {
-  color: var(--secondary);
-}
-
-.emotion-apply-btn {
-  margin-left: auto;
-  padding: var(--space-1) var(--space-3);
-  background: var(--primary-gradient);
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-xs);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.emotion-apply-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-.scam-warning {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  flex-wrap: wrap;
-}
-
-.scam-warning.medium {
+.risk-medium {
   background: var(--warning-bg);
-  border: 1px solid var(--warning);
+  border: 1px solid rgba(180, 83, 9, 0.18);
 }
 
-.scam-warning.high {
+.risk-high {
   background: var(--error-bg);
-  border: 1px solid var(--error);
-  animation: shake 0.5s ease-in-out;
+  border: 1px solid rgba(180, 35, 24, 0.18);
 }
 
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
-}
-
-.scam-icon {
-  font-size: var(--font-xl);
-}
-
-.scam-text {
+.signal-copy {
   flex: 1;
+  min-width: 0;
+}
+
+.signal-label {
+  display: block;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.signal-text {
+  display: block;
+  margin-top: 5px;
   font-size: var(--font-sm);
   color: var(--text-primary);
   line-height: 1.5;
 }
 
-.scam-warning.high .scam-text {
-  color: var(--error);
-  font-weight: 600;
-}
-
-.scam-warning.medium .scam-text {
-  color: var(--warning);
-}
-
-.scam-confidence {
-  font-size: var(--font-xs);
-  color: var(--text-tertiary);
-  background: rgba(0, 0, 0, 0.1);
-  padding: 2px 8px;
+.signal-btn,
+.confidence-pill {
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 0 var(--space-3);
   border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.signal-btn {
+  background: var(--primary-gradient);
+  color: white;
+}
+
+.confidence-pill {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
 }
 
 .style-selector {
@@ -642,11 +656,13 @@ const goToSettings = () => {
 }
 
 .style-label {
-  font-size: var(--font-sm);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text-secondary);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
   display: block;
-  font-weight: 500;
 }
 
 .style-buttons {
@@ -656,8 +672,9 @@ const goToSettings = () => {
 }
 
 .style-btn {
-  padding: var(--space-1) var(--space-3);
-  background: var(--bg-primary);
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  background: rgba(255, 255, 255, 0.68);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
   font-size: var(--font-xs);
@@ -668,8 +685,8 @@ const goToSettings = () => {
 }
 
 .style-btn:hover:not(.active) {
-  border-color: var(--primary);
-  color: var(--primary);
+  border-color: rgba(15, 118, 110, 0.35);
+  color: var(--text-primary);
 }
 
 .style-btn.active {
@@ -682,14 +699,12 @@ const goToSettings = () => {
 .generate-btn {
   width: 100%;
   margin-top: var(--space-4);
-  padding: var(--space-3);
+  min-height: 46px;
   background: var(--primary-gradient);
   color: white;
-  border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   font-size: var(--font-md);
   font-weight: 600;
-  cursor: pointer;
   transition: all var(--transition);
 }
 
@@ -710,17 +725,16 @@ const goToSettings = () => {
 }
 
 .reply-card {
-  background: var(--bg-primary);
-  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 242, 234, 0.78) 100%);
+  border-radius: var(--radius-xl);
   padding: var(--space-4);
-  border: 2px solid var(--border-color);
+  border: 1px solid var(--border-color);
   transition: all var(--transition-slow);
-  cursor: pointer;
   box-shadow: var(--shadow-sm);
 }
 
 .reply-card:hover {
-  border-color: var(--primary);
+  border-color: rgba(15, 118, 110, 0.24);
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
 }
@@ -738,8 +752,8 @@ const goToSettings = () => {
   justify-content: center;
   width: 26px;
   height: 26px;
-  background: var(--primary-gradient);
-  color: white;
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--primary-dark);
   border-radius: var(--radius-full);
   font-size: var(--font-xs);
   font-weight: 700;
@@ -750,8 +764,8 @@ const goToSettings = () => {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  background: var(--primary-bg);
-  color: var(--primary-dark);
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--text-secondary);
   border-radius: var(--radius-full);
   font-size: var(--font-xs);
   font-weight: 500;
@@ -793,7 +807,7 @@ const goToSettings = () => {
   line-height: 1.6;
   color: var(--text-primary);
   margin-bottom: var(--space-3);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .reply-actions {
@@ -806,23 +820,22 @@ const goToSettings = () => {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  border: none;
+  min-height: 36px;
+  padding: 0 var(--space-3);
   border-radius: var(--radius-md);
   font-size: var(--font-sm);
-  font-weight: 500;
-  cursor: pointer;
+  font-weight: 700;
   transition: all var(--transition);
 }
 
 .btn-copy {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
 }
 
 .btn-copy:hover {
-  background: var(--border-color);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .btn-paste {
@@ -836,37 +849,149 @@ const goToSettings = () => {
   box-shadow: var(--shadow-md);
 }
 
-.empty-tip {
+.empty-state-card {
   text-align: center;
   padding: var(--space-8) var(--space-5);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px dashed var(--border-strong);
 }
 
-.tip-icon {
-  font-size: 40px;
-  display: block;
-  margin-bottom: var(--space-3);
+.empty-state-card.muted {
+  background: rgba(255, 255, 255, 0.34);
 }
 
-.tip-text {
+.empty-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--secondary-bg);
+  color: var(--secondary-dark);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.empty-text {
+  margin-top: var(--space-3);
   font-size: var(--font-md);
   color: var(--text-secondary);
-  margin-bottom: var(--space-4);
+  line-height: 1.6;
 }
 
 .btn-go-settings {
-  padding: var(--space-2) var(--space-5);
+  min-height: 40px;
+  margin-top: var(--space-4);
+  padding: 0 var(--space-5);
   background: var(--primary-gradient);
   color: white;
-  border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   font-size: var(--font-sm);
-  font-weight: 500;
-  cursor: pointer;
+  font-weight: 700;
   transition: all var(--transition);
 }
 
 .btn-go-settings:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 520px) {
+  .reply-page {
+    gap: var(--space-3);
+  }
+
+  .hero-panel,
+  .composer-panel,
+  .results-panel {
+    padding: var(--space-4);
+    border-radius: var(--radius-xl);
+  }
+
+  .hero-panel {
+    gap: var(--space-3);
+  }
+
+  .hero-title {
+    margin-top: 6px;
+    line-height: 1.42;
+    letter-spacing: 0;
+  }
+
+  .panel-title {
+    margin-top: 6px;
+    line-height: 1.4;
+    letter-spacing: 0;
+  }
+
+  .hero-metrics {
+    gap: var(--space-2);
+  }
+
+  .metric-tile {
+    padding: 10px;
+    border-radius: var(--radius-lg);
+  }
+
+  .metric-value {
+    margin-top: 4px;
+  }
+
+  .panel-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  .head-actions {
+    width: 78px;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .action-chip {
+    width: 100%;
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+  }
+
+  .input-textarea {
+    min-height: 136px;
+    padding: var(--space-3);
+    border-radius: var(--radius-xl);
+    line-height: 1.7;
+  }
+
+  .style-selector {
+    margin-top: var(--space-3);
+  }
+
+  .style-label {
+    margin-bottom: var(--space-2);
+  }
+
+  .style-buttons {
+    gap: 7px;
+  }
+
+  .style-btn {
+    min-height: 32px;
+    padding: 0 12px;
+  }
+
+  .generate-btn {
+    min-height: 42px;
+    margin-top: var(--space-3);
+    border-radius: var(--radius-lg);
+  }
+
+  .empty-state-card {
+    padding: var(--space-6) var(--space-4);
+  }
 }
 </style>

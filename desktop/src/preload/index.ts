@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     close: () => ipcRenderer.invoke('window:close'),
     toggleDock: () => ipcRenderer.invoke('window:toggleDock'),
     checkWeChat: () => ipcRenderer.invoke('window:checkWeChat'),
+    getDockStatus: () => ipcRenderer.invoke('window:getDockStatus'),
     setAlwaysOnTop: (alwaysOnTop: boolean) => ipcRenderer.invoke('window:setAlwaysOnTop', alwaysOnTop)
   },
 
@@ -66,6 +67,7 @@ declare global {
         close: () => Promise<void>
         toggleDock: () => Promise<boolean>
         checkWeChat: () => Promise<boolean>
+        getDockStatus: () => Promise<{ enabled: boolean; wechatFound: boolean; platform: string; side: string | null }>
         setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<void>
       }
       clipboard: {

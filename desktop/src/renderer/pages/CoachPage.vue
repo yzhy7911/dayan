@@ -6,13 +6,13 @@
 
     <div class="top-bar">
       <select v-model="currentGoalId" @change="onGoalChange">
-        <option value="">🎯 选择目标</option>
+        <option value="">选择目标</option>
         <option v-for="goal in goals" :key="goal.id" :value="goal.id">{{ goal.name }}</option>
       </select>
       <div class="top-bar-actions">
-        <button class="icon-btn" @click="showNewGoalModal = true" title="新建">➕</button>
-        <button v-if="currentGoal" class="icon-btn" @click="openEditGoalModal" title="编辑">✏️</button>
-        <button v-if="currentGoal" class="icon-btn danger" @click="confirmDeleteGoal" title="删除">🗑️</button>
+        <button class="icon-btn" @click="showNewGoalModal = true" title="新建">新增</button>
+        <button v-if="currentGoal" class="icon-btn" @click="openEditGoalModal" title="编辑">编辑</button>
+        <button v-if="currentGoal" class="icon-btn danger" @click="confirmDeleteGoal" title="删除">删除</button>
       </div>
     </div>
 
@@ -23,7 +23,7 @@
         {{ isMonitorActive ? '正在监听剪贴板...' : '剪贴板监听' }}
       </span>
       <button class="monitor-toggle-btn" @click="toggleMonitor">
-        {{ isMonitorActive ? '🔴 停止' : '📡 开始' }}
+        {{ isMonitorActive ? '停止' : '开始' }}
       </button>
     </div>
 
@@ -43,7 +43,7 @@
     <div v-if="currentGoal" class="history-sticky">
       <div class="history-header">
         <span @click="toggleHistory" style="cursor: pointer;">
-          📝 历史 ({{ currentGoal.messages.length }})
+          历史记录 ({{ currentGoal.messages.length }})
         </span>
         <div style="display: flex; align-items: center; gap: 8px;">
           <button
@@ -52,7 +52,7 @@
             :disabled="isAnalyzingAll"
             @click.stop="analyzeAllMessages"
           >
-            {{ isAnalyzingAll ? '🔄 分析中...' : '🔮 整体分析' }}
+            {{ isAnalyzingAll ? '分析中...' : '整体分析' }}
           </button>
           <span class="toggle" @click="toggleHistory">{{ showHistory ? '▲' : '▼' }}</span>
         </div>
@@ -70,7 +70,7 @@
     <div v-if="currentGoal" class="content">
       <!-- 顶部技能选择器 -->
       <div class="skill-selector">
-        <span class="skill-label">🎯 军师技能</span>
+        <span class="skill-label">军师技能</span>
         <select v-model="selectedSkill" class="skill-select">
           <option value="">默认分析</option>
           <option v-for="skill in availableSkills" :key="skill">{{ skill }}</option>
@@ -80,7 +80,7 @@
       <!-- 胜率 + 意图 合并卡片 -->
       <div class="card status-card">
         <div class="status-left">
-          <div class="card-title">📊 胜率</div>
+          <div class="card-title">胜率</div>
           <div class="winrate-compact">
             <span class="winrate-num">{{ latestAnalysis?.winRate || '--' }}%</span>
             <div class="progress-small">
@@ -89,12 +89,12 @@
           </div>
           <div class="situation-compact">
             <div class="good-tag">✓ {{ latestAnalysis?.advantages || '暂无' }}</div>
-            <div class="bad-tag">⚠ {{ latestAnalysis?.disadvantages || '暂无' }}</div>
+            <div class="bad-tag">{{ latestAnalysis?.disadvantages || '暂无' }}</div>
           </div>
         </div>
         <div class="status-divider"></div>
         <div class="status-right">
-          <div class="card-title">🎭 意图</div>
+          <div class="card-title">意图</div>
           <div class="intent-list">
             <div class="intent-item"><span class="intent-label">情绪</span><span class="orange">{{ latestAnalysis?.emotion || '--' }}</span></div>
             <div class="intent-item"><span class="intent-label">真实</span><span class="red">{{ latestAnalysis?.realIntent || '--' }}</span></div>
@@ -105,27 +105,27 @@
 
       <!-- 策略建议 -->
       <div class="card strategy">
-        <div class="card-title">💡 策略建议</div>
+        <div class="card-title">策略建议</div>
         <div class="strategy-split">
           <div class="strategy-col">
-            <div class="col-title good">✅ 应该做</div>
+            <div class="col-title good">应该做</div>
             <div class="strategy-list">
               <div v-for="(item, idx) in (latestAnalysis?.shouldDo || [])" :key="idx" class="strategy-item">{{ item }}</div>
             </div>
           </div>
           <div class="strategy-col">
-            <div class="col-title bad">❌ 不要做</div>
+            <div class="col-title bad">不要做</div>
             <div class="strategy-list">
               <div v-for="(item, idx) in (latestAnalysis?.shouldNotDo || [])" :key="idx" class="strategy-item">{{ item }}</div>
             </div>
           </div>
         </div>
-        <div class="tone">🎨 语气：{{ latestAnalysis?.recommendedTone || '--' }}</div>
+        <div class="tone">建议语气：{{ latestAnalysis?.recommendedTone || '--' }}</div>
       </div>
 
       <!-- 推荐话术 -->
       <div class="card replies">
-        <div class="card-title">💬 推荐话术</div>
+        <div class="card-title">推荐话术</div>
         <div class="replies-list">
           <div v-for="(reply, idx) in (latestAnalysis?.replies || [])" :key="idx" class="reply-item">
             <div class="reply-header">
@@ -134,8 +134,8 @@
             </div>
             <div class="reply-content">{{ reply.content }}</div>
             <div class="reply-actions">
-              <button class="btn-copy" @click="copyReply(reply, idx)">📋 复制</button>
-              <button class="btn-send" @click="sendReply(reply, idx)">🚀 发送</button>
+              <button class="btn-copy" @click="copyReply(reply, idx)">复制</button>
+              <button class="btn-send" @click="sendReply(reply, idx)">发送</button>
             </div>
           </div>
           <div v-if="!latestAnalysis?.replies?.length" class="empty">暂无话术</div>
@@ -148,20 +148,20 @@
       <div class="input-footer">
         <span>Ctrl+Enter 发送</span>
         <button :disabled="!inputText.trim() || isSending" @click="sendMessage">
-          {{ isSending ? '🔄 分析中...' : '🧠 发送' }}
+          {{ isSending ? '分析中...' : '发送分析' }}
         </button>
       </div>
     </div>
 
     <div v-if="!currentGoal" class="empty-state">
-      <div class="empty-icon">🧠</div>
+      <div class="empty-icon"></div>
       <div class="empty-title">聊天军师</div>
-      <button @click="showNewGoalModal = true">➕ 创建目标</button>
+      <button @click="showNewGoalModal = true">创建目标</button>
     </div>
 
     <div v-if="showNewGoalModal" class="modal" @click="showNewGoalModal = false">
       <div @click.stop>
-        <div class="modal-title">✨ 创建目标</div>
+        <div class="modal-title">创建目标</div>
         <input v-model="newGoalName" placeholder="目标名称" />
         <textarea v-model="newGoalContent" placeholder="目标描述（可选）" rows="2"></textarea>
         <div class="modal-footer">
@@ -173,7 +173,7 @@
 
     <div v-if="showEditGoalModal" class="modal" @click="showEditGoalModal = false">
       <div @click.stop>
-        <div class="modal-title">✏️ 编辑目标</div>
+        <div class="modal-title">编辑目标</div>
         <input v-model="editGoalName" placeholder="目标名称" />
         <textarea v-model="editGoalContent" placeholder="目标描述（可选）" rows="3"></textarea>
         <div class="modal-footer">
@@ -185,7 +185,7 @@
 
     <div v-if="showDeleteModal" class="modal" @click="showDeleteModal = false">
       <div @click.stop>
-        <div class="modal-title">⚠️ 删除目标</div>
+        <div class="modal-title">删除目标</div>
         <p>确定删除「{{ currentGoal?.name }}」？</p>
         <div class="modal-footer">
           <button @click="showDeleteModal = false">取消</button>
@@ -198,18 +198,18 @@
     <div v-if="showAnalysisModal" class="modal analysis-modal" @click="showAnalysisModal = false">
       <div class="modal-content-large" @click.stop>
         <div class="modal-header">
-          <div class="modal-title">🔮 整体对话分析</div>
+          <div class="modal-title">整体对话分析</div>
           <button class="close-btn" @click="showAnalysisModal = false">✕</button>
         </div>
 
         <div v-if="isAnalyzingAll" class="loading-state">
-          <div class="loading-spinner">🔄</div>
+          <div class="loading-spinner"></div>
           <p>正在深度分析历史对话...</p>
         </div>
 
         <div v-else class="analysis-result">
           <div class="analysis-section">
-            <div class="section-title">📊 总体评估</div>
+            <div class="section-title">总体评估</div>
             <div class="winrate-display">
               <span class="winrate-value">{{ overallAnalysis.winRate || 0 }}%</span>
               <span class="winrate-label">当前成功率</span>
@@ -217,26 +217,26 @@
           </div>
 
           <div class="analysis-section">
-            <div class="section-title">💡 关系现状</div>
+            <div class="section-title">关系现状</div>
             <div class="status-text">{{ overallAnalysis.relationshipStatus || '暂无分析' }}</div>
           </div>
 
           <div class="analysis-section">
-            <div class="section-title">🎭 对方画像</div>
+            <div class="section-title">对方画像</div>
             <div class="personality-tags">
               <span v-for="(t, i) in overallAnalysis.personality || []" :key="i" class="personality-tag">{{ t }}</span>
             </div>
           </div>
 
           <div class="analysis-section">
-            <div class="section-title">⚠️ 潜在风险</div>
+            <div class="section-title">潜在风险</div>
             <ul class="risk-list">
               <li v-for="(r, i) in overallAnalysis.risks || []" :key="i">{{ r }}</li>
             </ul>
           </div>
 
           <div class="analysis-section">
-            <div class="section-title">🚀 下一步建议</div>
+            <div class="section-title">下一步建议</div>
             <ul class="suggestion-list">
               <li v-for="(s, i) in overallAnalysis.nextSteps || []" :key="i">{{ s }}</li>
             </ul>
@@ -1606,5 +1606,201 @@ const extractMessageContent = (content: string) => {
 .clipboard-add-btn:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
+}
+
+/* ===== 设计升级覆盖 ===== */
+.coach-page {
+  height: auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: transparent;
+  overflow: visible;
+}
+
+.top-bar,
+.clipboard-monitor-bar,
+.clipboard-toast,
+.history-sticky,
+.input-area {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(247, 241, 233, 0.88) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px);
+}
+
+.top-bar,
+.clipboard-monitor-bar,
+.clipboard-toast,
+.history-sticky {
+  border-radius: var(--radius-xl);
+}
+
+.top-bar {
+  padding: var(--space-4);
+  gap: var(--space-3);
+}
+
+.top-bar select,
+.skill-select,
+.input-area textarea,
+.modal input,
+.modal textarea {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.top-bar select,
+.skill-select {
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  color: var(--text-primary);
+}
+
+.top-bar-actions .icon-btn,
+.monitor-toggle-btn,
+.analyze-all-btn,
+.btn-copy,
+.btn-send,
+.modal-footer button:last-child,
+.input-footer button,
+.empty-state button {
+  background: var(--primary-gradient);
+  color: white;
+  border: none;
+  box-shadow: 0 16px 28px rgba(15, 118, 110, 0.16);
+}
+
+.top-bar-actions .icon-btn {
+  min-width: 48px;
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.top-bar-actions .icon-btn.danger,
+.modal-footer .danger {
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+}
+
+.content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: 0;
+  overflow: visible;
+}
+
+.card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 241, 233, 0.84) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.status-card {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.status-divider {
+  display: none;
+}
+
+.strategy-split {
+  gap: var(--space-4);
+}
+
+.strategy-item {
+  border-bottom-style: dashed;
+}
+
+.reply-item {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(226, 250, 244, 0.92) 100%);
+  border-color: rgba(15, 118, 110, 0.18);
+}
+
+.reply-style,
+.personality-tag {
+  background: var(--primary-bg);
+  color: var(--primary-dark);
+}
+
+.history-sticky {
+  overflow: hidden;
+}
+
+.history-header {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid rgba(72, 57, 41, 0.08);
+}
+
+.history-body {
+  max-height: 180px;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+.msg-bubble {
+  border-radius: 14px;
+}
+
+.input-area {
+  margin-top: auto;
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+}
+
+.input-footer button:disabled {
+  background: rgba(157, 143, 130, 0.4);
+  box-shadow: none;
+}
+
+.empty-state {
+  border-radius: var(--radius-2xl);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(247, 241, 233, 0.72) 100%);
+  border: 1px dashed var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.empty-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--space-4);
+  opacity: 1;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.14) 0%, rgba(194, 65, 12, 0.1) 100%);
+  border: 1px solid rgba(15, 118, 110, 0.12);
+}
+
+.modal > div,
+.modal-content-large {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 241, 233, 0.94) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.62);
+}
+
+.loading-spinner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 3px solid rgba(15, 118, 110, 0.14);
+  border-top-color: var(--primary);
+}
+
+:global(.dark-theme) .top-bar,
+:global(.dark-theme) .clipboard-monitor-bar,
+:global(.dark-theme) .clipboard-toast,
+:global(.dark-theme) .history-sticky,
+:global(.dark-theme) .input-area,
+:global(.dark-theme) .card,
+:global(.dark-theme) .modal > div,
+:global(.dark-theme) .modal-content-large {
+  background: var(--surface-main) !important;
+  border-color: var(--border-color) !important;
+  backdrop-filter: none;
 }
 </style>

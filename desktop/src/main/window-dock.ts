@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow } from 'electron'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { logger } from './logger'
@@ -16,6 +16,8 @@ interface WindowRect {
   width: number
   height: number
 }
+
+type DockSide = 'left' | 'right' | 'top' | 'bottom'
 
 /**
  * 使用 AppleScript 获取微信窗口位置
@@ -85,30 +87,32 @@ async function getWeChatWindow(): Promise<WindowRect | null> {
 function calculateDockPosition(
   appRect: WindowRect,
   wechatRect: WindowRect
-): { x: number; y: number } | null {
+): { x: number; y: number; side: DockSide } | null {
   const appRight = appRect.x + appRect.width
   const appBottom = appRect.y + appRect.height
   const wechatRight = wechatRect.x + wechatRect.width
   const wechatBottom = wechatRect.y + wechatRect.height
 
-  // 水平中心对齐
+  // 左右吸附看垂直中心，上下吸附看水平中心。
   const appCenterX = appRect.x + appRect.width / 2
   const wechatCenterX = wechatRect.x + wechatRect.width / 2
+  const appCenterY = appRect.y + appRect.height / 2
+  const wechatCenterY = wechatRect.y + wechatRect.height / 2
 
   // 左边吸附
   if (
     Math.abs(appRight - wechatRect.x) < DOCK_THRESHOLD &&
-    Math.abs(appCenterX - wechatCenterX) < 150
+    Math.abs(appCenterY - wechatCenterY) < 150
   ) {
-    return { x: wechatRect.x - appRect.width, y: wechatRect.y }
+    return { x: wechatRect.x - appRect.width, y: wechatRect.y, side: 'left' }
   }
 
   // 右边吸附
   if (
     Math.abs(appRect.x - wechatRight) < DOCK_THRESHOLD &&
-    Math.abs(appCenterX - wechatCenterX) < 150
+    Math.abs(appCenterY - wechatCenterY) < 150
   ) {
-    return { x: wechatRight, y: wechatRect.y }
+    return { x: wechatRight, y: wechatRect.y, side: 'right' }
   }
 
   // 上边吸附
@@ -116,7 +120,7 @@ function calculateDockPosition(
     Math.abs(appBottom - wechatRect.y) < DOCK_THRESHOLD &&
     Math.abs(appCenterX - wechatCenterX) < 150
   ) {
-    return { x: wechatRect.x, y: wechatRect.y - appRect.height }
+    return { x: wechatRect.x, y: wechatRect.y - appRect.height, side: 'top' }
   }
 
   // 下边吸附
@@ -124,10 +128,27 @@ function calculateDockPosition(
     Math.abs(appRect.y - wechatBottom) < DOCK_THRESHOLD &&
     Math.abs(appCenterX - wechatCenterX) < 150
   ) {
-    return { x: wechatRect.x, y: wechatBottom }
+    return { x: wechatRect.x, y: wechatBottom, side: 'bottom' }
   }
 
   return null
+}
+
+function getDockPositionBySide(
+  side: DockSide,
+  appRect: WindowRect,
+  wechatRect: WindowRect
+): { x: number; y: number } {
+  switch (side) {
+    case 'left':
+      return { x: wechatRect.x - appRect.width, y: wechatRect.y }
+    case 'right':
+      return { x: wechatRect.x + wechatRect.width, y: wechatRect.y }
+    case 'top':
+      return { x: wechatRect.x, y: wechatRect.y - appRect.height }
+    case 'bottom':
+      return { x: wechatRect.x, y: wechatRect.y + wechatRect.height }
+  }
 }
 
 /**
@@ -135,13 +156,22 @@ function calculateDockPosition(
  */
 class WindowDockManager {
   private mainWindow: BrowserWindow | null = null
-  private isDockingEnabled = true
+  private isDockingEnabled = false
   private isMoving = false
   private dockTimer: NodeJS.Timeout | null = null
+  private followTimer: NodeJS.Timeout | null = null
   private lastDockTime = 0
   private hasPermissionsChecked = false
+  private dockSide: DockSide | null = null
+  private isInitialized = false
 
   init(window: BrowserWindow) {
+    if (this.isInitialized) {
+      this.mainWindow = window
+      return
+    }
+
+    this.isInitialized = true
     this.mainWindow = window
 
     // 启动时检查权限
@@ -157,7 +187,7 @@ class WindowDockManager {
       }
 
       this.dockTimer = setTimeout(() => {
-        this.tryDockToWeChat()
+        this.tryDockToWeChat('manual')
       }, DEBOUNCE_MS)
     })
 
@@ -166,23 +196,44 @@ class WindowDockManager {
       if (!this.isDockingEnabled || this.isMoving) return
       // 停止移动后再检查一次
       setTimeout(() => {
-        this.tryDockToWeChat()
+        this.tryDockToWeChat('manual')
       }, 100)
     })
 
-    // 注册 IPC 控制
-    ipcMain.handle('window:toggleDock', () => {
-      this.isDockingEnabled = !this.isDockingEnabled
-      logger.info('Dock', `窗口吸附 ${this.isDockingEnabled ? '已开启' : '已关闭'}`)
-      return this.isDockingEnabled
-    })
-
-    ipcMain.handle('window:checkWeChat', async () => {
-      const wechat = await getWeChatWindow()
-      return wechat != null
-    })
-
+    this.startFollowing()
     logger.info('Dock', '✅ 窗口吸附管理器已初始化，吸附阈值:', DOCK_THRESHOLD)
+  }
+
+  toggleDock(): boolean {
+    this.isDockingEnabled = !this.isDockingEnabled
+    if (!this.isDockingEnabled) {
+      this.dockSide = null
+    } else {
+      this.tryDockToWeChat('manual', true)
+    }
+    logger.info('Dock', `窗口吸附 ${this.isDockingEnabled ? '已开启' : '已关闭'}`)
+    return this.isDockingEnabled
+  }
+
+  async checkWeChat(): Promise<boolean> {
+    const wechat = await getWeChatWindow()
+    return wechat != null
+  }
+
+  getDockStatus() {
+    return {
+      enabled: this.isDockingEnabled,
+      side: this.dockSide
+    }
+  }
+
+  private startFollowing() {
+    if (this.followTimer) return
+
+    this.followTimer = setInterval(() => {
+      if (!this.isDockingEnabled || !this.dockSide) return
+      this.tryDockToWeChat('follow')
+    }, 300)
   }
 
   private async checkPermissions() {
@@ -204,7 +255,7 @@ class WindowDockManager {
     }
   }
 
-  private async tryDockToWeChat() {
+  private async tryDockToWeChat(mode: 'manual' | 'follow', allowDefaultDock = false) {
     if (!this.mainWindow) return
 
     // 限制频率，避免太频繁
@@ -221,12 +272,18 @@ class WindowDockManager {
 
       logger.info('Dock', '当前窗口位置:', { x, y, w: width, h: height })
 
-      const dockPosition = calculateDockPosition(
-        { x, y, width, height },
-        wechatRect
-      )
+      const appRect = { x, y, width, height }
+      const dockPosition = mode === 'manual'
+        ? calculateDockPosition(appRect, wechatRect)
+        : (this.dockSide
+            ? {
+                ...getDockPositionBySide(this.dockSide, appRect, wechatRect),
+                side: this.dockSide
+              }
+            : null)
 
       if (dockPosition) {
+        this.dockSide = dockPosition.side
         this.isMoving = true
         logger.info('Dock', '🎯 吸附到:', dockPosition)
         this.mainWindow.setPosition(dockPosition.x, dockPosition.y)
@@ -234,6 +291,19 @@ class WindowDockManager {
         setTimeout(() => {
           this.isMoving = false
         }, 500)
+      } else if (allowDefaultDock) {
+        const fallbackSide: DockSide = this.dockSide || 'right'
+        const fallbackPosition = getDockPositionBySide(fallbackSide, appRect, wechatRect)
+        this.dockSide = fallbackSide
+        this.isMoving = true
+        logger.info('Dock', '🎯 使用默认方向吸附:', { side: fallbackSide, ...fallbackPosition })
+        this.mainWindow.setPosition(fallbackPosition.x, fallbackPosition.y)
+        setTimeout(() => {
+          this.isMoving = false
+        }, 500)
+      } else if (mode === 'manual' && this.dockSide) {
+        this.dockSide = null
+        logger.info('Dock', '已取消窗口吸附跟随')
       }
     } catch (e: any) {
       logger.error('Dock', '吸附失败:', e.message)

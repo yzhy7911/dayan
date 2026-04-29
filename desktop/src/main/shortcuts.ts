@@ -25,28 +25,33 @@ class ShortcutManager {
   }
 
   private setupIpcHandlers() {
-    ipcMain.handle('shortcuts:getConfig', () => {
+    const safeHandle = (channel: string, handler: Parameters<typeof ipcMain.handle>[1]) => {
+      ipcMain.removeHandler(channel)
+      ipcMain.handle(channel, handler)
+    }
+
+    safeHandle('shortcuts:getConfig', () => {
       return this.shortcuts
     })
 
-    ipcMain.handle('shortcuts:setConfig', (_event, config: Partial<ShortcutConfig>) => {
+    safeHandle('shortcuts:setConfig', (_event, config: Partial<ShortcutConfig>) => {
       this.shortcuts = { ...this.shortcuts, ...config }
       this.registerDefaultShortcuts()
       logger.info('Shortcuts', '快捷键配置已更新', config)
       return true
     })
 
-    ipcMain.handle('shortcuts:register', (_event, accelerator: string, action: string) => {
+    safeHandle('shortcuts:register', (_event, accelerator: string, action: string) => {
       return this.registerDynamicShortcut(accelerator, action)
     })
 
-    ipcMain.handle('shortcuts:unregister', (_event, accelerator: string) => {
+    safeHandle('shortcuts:unregister', (_event, accelerator: string) => {
       globalShortcut.unregister(accelerator)
       logger.info('Shortcuts', '已注销快捷键', accelerator)
       return true
     })
 
-    ipcMain.handle('shortcuts:reset', () => {
+    safeHandle('shortcuts:reset', () => {
       this.shortcuts = { ...DEFAULT_SHORTCUTS }
       this.registerDefaultShortcuts()
       logger.info('Shortcuts', '快捷键已重置为默认值')
