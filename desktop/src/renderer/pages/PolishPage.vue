@@ -191,8 +191,8 @@ const pasteResult = async (text: string) => {
 }
 
 .hero-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1.12fr) minmax(280px, 0.92fr);
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
   background:
     radial-gradient(circle at top right, rgba(20, 184, 166, 0.16), transparent 26%),
@@ -232,7 +232,7 @@ const pasteResult = async (text: string) => {
 
 .hero-metrics {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
 }
 

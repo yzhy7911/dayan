@@ -5,7 +5,11 @@
     </aside>
     <div class="workspace-column">
       <TitleBar />
-      <div class="main-content">
+      <div 
+        class="main-content" 
+        ref="mainContentRef"
+        @mousedown="handleMouseDown"
+      >
         <router-view v-slot="{ Component }">
           <keep-alive :include="['Reply', 'Knowledge']">
             <component :is="Component" />
@@ -27,6 +31,7 @@ import { HistoryStorage } from './utils/history-storage'
 import { ContactStorage } from './utils/contact-storage'
 import { initDatabase } from './utils/storage'
 import { MemoryManager } from './utils/memory-manager'
+import { useDragScroll } from './composables/useDragScroll'
 
 // 异步加载新手引导组件，减少首屏体积
 const OnboardingGuide = defineAsyncComponent(
@@ -35,6 +40,9 @@ const OnboardingGuide = defineAsyncComponent(
 
 const showOnboarding = ref(false)
 let idleTaskId: number | null = null
+
+// 使用鼠标拖动滚动 composable
+const { containerRef: mainContentRef, handleMouseDown } = useDragScroll()
 
 const runWhenIdle = (task: () => void) => {
   if (typeof window.requestIdleCallback === 'function') {
@@ -139,6 +147,18 @@ onUnmounted(() => {
   padding-right: 2px;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  cursor: grab;
+}
+
+.main-content::-webkit-scrollbar {
+  display: none;
+}
+
+.main-content.dragging {
+  cursor: grabbing;
+  user-select: none;
 }
 
 @media (max-width: 520px) {

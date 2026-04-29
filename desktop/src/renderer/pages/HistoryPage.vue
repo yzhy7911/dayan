@@ -289,8 +289,8 @@ onMounted(() => {
 }
 
 .history-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
   background:
     radial-gradient(circle at top right, rgba(47, 107, 102, 0.13), transparent 30%),
@@ -313,10 +313,10 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-.hero-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
+.history-hero .hero-stats {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: var(--space-3) !important;
 }
 
 .stat-tile {
@@ -605,13 +605,8 @@ onMounted(() => {
 }
 
 @media (max-width: 980px) {
-  .history-hero,
-  .history-toolbar {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .hero-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

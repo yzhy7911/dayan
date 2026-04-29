@@ -42,7 +42,7 @@
               <path d="M6.5 8.5 10 12l3.5-3.5" />
               <path d="M3.5 15.5h13" />
             </svg>
-            导入话术
+            导入
           </button>
           <button class="btn btn-secondary" @click="exportKnowledge">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -50,14 +50,14 @@
               <path d="M6.5 6.5 10 3l3.5 3.5" />
               <path d="M3.5 15.5h13" />
             </svg>
-            导出资产
+            导出
           </button>
           <button class="btn btn-primary" @click="openAddModal">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
               <path d="M10 4.5v11" />
               <path d="M4.5 10h11" />
             </svg>
-            新建话术
+            新建
           </button>
         </div>
       </div>
@@ -751,8 +751,8 @@ const exportKnowledge = () => {
 }
 
 .knowledge-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.95fr);
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
   background:
     radial-gradient(circle at top right, rgba(47, 107, 102, 0.14), transparent 30%),
@@ -791,10 +791,10 @@ const exportKnowledge = () => {
   color: var(--text-secondary);
 }
 
-.hero-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+.knowledge-hero .hero-stats {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: var(--space-3) !important;
 }
 
 .hero-stat-card,
@@ -849,7 +849,12 @@ const exportKnowledge = () => {
 }
 
 .action-group .btn {
-  min-width: 116px;
+  width: 80px;
+}
+
+.action-group .btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .search-row {
@@ -1435,16 +1440,6 @@ const exportKnowledge = () => {
   .knowledge-card-foot {
     flex-direction: row;
     align-items: center;
-  }
-
-  .action-group,
-  .modal-footer {
-    width: 100%;
-  }
-
-  .action-group .btn,
-  .modal-footer .btn {
-    flex: 1;
   }
 
   .card-copy-btn {
