@@ -36,9 +36,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   ai: {
-    generateReply: (context: string, style: string, imageData?: string) => ipcRenderer.invoke('ai:generateReply', context, style, imageData),
+    generateReply: (context: string, style: string, mode?: 'fast' | 'balanced' | 'deep', imageData?: string) =>
+      ipcRenderer.invoke('ai:generateReply', context, style, mode, imageData),
     polishText: (text: string, style: string) => ipcRenderer.invoke('ai:polishText', text, style),
-    analyzeIntent: (chatHistory: any[], goal?: string) => ipcRenderer.invoke('ai:analyzeIntent', chatHistory, goal),
+    generatePhrasebookDrafts: (documents: any[]) => ipcRenderer.invoke('ai:generatePhrasebookDrafts', documents),
+    refineKnowledgeDocument: (document: any) => ipcRenderer.invoke('ai:refineKnowledgeDocument', document),
+    analyzeIntent: (chatHistory: any[], goal?: string, mode?: 'fast' | 'balanced' | 'deep') =>
+      ipcRenderer.invoke('ai:analyzeIntent', chatHistory, goal, mode),
     analyzeOverall: (chatHistory: any[], goal?: string) => ipcRenderer.invoke('ai:analyzeOverall', chatHistory, goal),
     setConfig: (config: any) => ipcRenderer.invoke('ai:setConfig', config),
     initConfig: (config: any) => ipcRenderer.invoke('ai:initConfig', config),
@@ -111,9 +115,11 @@ declare global {
         isActivated: () => Promise<boolean>
       }
       ai: {
-        generateReply: (context: string, style: string, imageData?: string) => Promise<{ style: string; reply: string }[]>
+        generateReply: (context: string, style: string, mode?: 'fast' | 'balanced' | 'deep', imageData?: string) => Promise<{ style: string; reply: string }[]>
         polishText: (text: string, style: string) => Promise<string[]>
-        analyzeIntent: (chatHistory: any[], goal?: string) => Promise<any>
+        generatePhrasebookDrafts: (documents: any[]) => Promise<Array<{ category: string; keyword: string; content: string; sourceTitle?: string }>>
+        refineKnowledgeDocument: (document: any) => Promise<{ success: boolean; title?: string; content?: string; type?: string; tags?: string[]; summary?: string; error?: string }>
+        analyzeIntent: (chatHistory: any[], goal?: string, mode?: 'fast' | 'balanced' | 'deep') => Promise<any>
         analyzeOverall: (chatHistory: any[], goal?: string) => Promise<any>
         testConnection: () => Promise<{ success: boolean; model?: string; error?: string }>
         setConfig: (config: any) => Promise<boolean>

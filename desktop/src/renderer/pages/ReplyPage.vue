@@ -15,6 +15,10 @@
           <span class="metric-value">{{ getStyleLabel(selectedStyle).replace('风格', '') }}</span>
         </div>
         <div class="metric-tile">
+          <span class="metric-label">档位</span>
+          <span class="metric-value">{{ getModeLabel(responseMode) }}</span>
+        </div>
+        <div class="metric-tile">
           <span class="metric-label">结果</span>
           <span class="metric-value">{{ replies.length }} 条</span>
         </div>
@@ -105,6 +109,35 @@
       </div>
 
       <div class="style-selector">
+        <span class="style-label">响应档位</span>
+        <div class="style-buttons">
+          <button
+            v-for="mode in responseModes"
+            :key="mode.value"
+            class="style-btn"
+            :class="{ active: responseMode === mode.value }"
+            @click="setResponseMode(mode.value)"
+          >
+            {{ mode.label }}
+          </button>
+        </div>
+      </div>
+      <label class="strict-knowledge-toggle">
+        <input v-model="strictKnowledgeReply" type="checkbox" />
+        <span>严格依据知识库回复</span>
+      </label>
+      <div
+        v-if="modeSuggestion && modeSuggestion !== responseMode"
+        class="signal-row mode-hint-row"
+      >
+        <div class="signal-copy">
+          <span class="signal-label">档位建议</span>
+          <span class="signal-text">当前内容建议切到「{{ getModeLabel(modeSuggestion) }}」提高效率与稳定性。</span>
+        </div>
+        <button class="signal-btn" @click="setResponseMode(modeSuggestion)">一键切换</button>
+      </div>
+
+      <div class="style-selector">
         <span class="style-label">风格模式</span>
         <div class="style-buttons">
           <button
@@ -139,7 +172,7 @@
         :disabled="!canGenerate || isGenerating"
         @click="generateReply"
       >
-        <span v-if="isGenerating">正在生成回复…</span>
+        <span v-if="isGenerating">{{ getModeLabel(responseMode) }}生成中…</span>
         <span v-else>生成回复</span>
       </button>
     </section>
@@ -154,6 +187,21 @@
       </div>
 
       <div class="replies-list" v-if="replies.length > 0">
+        <div v-if="contextMatches.phrasebook.length || contextMatches.knowledge.length" class="context-match-panel">
+          <div class="context-match-head">
+            <span>资料命中</span>
+            <strong>{{ contextMatches.phrasebook.length + contextMatches.knowledge.length }} 条</strong>
+          </div>
+          <div class="context-match-list">
+            <span v-for="item in contextMatches.phrasebook" :key="`phrase-${item.id || item.keyword}`" class="context-chip phrase">
+              话术本 · {{ item.keyword }}
+            </span>
+            <span v-for="item in contextMatches.knowledge" :key="`knowledge-${item.id || item.title}`" class="context-chip knowledge">
+              知识库 · {{ item.title }}
+            </span>
+          </div>
+        </div>
+
         <div
           v-for="(reply, index) in replies"
           :key="index"
@@ -163,6 +211,7 @@
             <div>
               <span class="reply-index">{{ index + 1 }}</span>
               <span :class="['style-tag', reply.style]">{{ getStyleLabel(reply.style) }}</span>
+              <span v-if="reply.sourceLabel" class="source-tag">{{ reply.sourceLabel }}</span>
             </div>
           </div>
           <div class="reply-content">{{ reply.reply }}</div>
@@ -173,8 +222,8 @@
             <button class="btn-copy" @click="copyReply(reply.reply)">
               复制
             </button>
-            <button class="btn-paste" @click="pasteReply(reply.reply)">
-              发送到微信
+            <button class="btn-paste" @click="copyReply(reply.reply)">
+              发送
             </button>
           </div>
         </div>
@@ -203,6 +252,12 @@ import { computed, ref, onActivated, onDeactivated, onMounted, onUnmounted, watc
 defineOptions({ name: 'Reply' })
 import { useRouter } from 'vue-router'
 import { hasAPIKey } from '../utils/storage'
+import {
+  formatMatchesForPrompt,
+  retrieveCommunicationContext,
+  type CommunicationContextMatches,
+  type ResponseMode
+} from '../utils/context-retrieval'
 import { EmotionDetector } from '../utils/emotion-detector'
 import { StyleLearner } from '../utils/style-learning'
 import { ScamDetector } from '../utils/ScamDetector'
@@ -212,8 +267,18 @@ const router = useRouter()
 const toast = useToast()
 const inputText = ref('')
 const selectedStyle = ref('all')
+const responseMode = ref<ResponseMode>('balanced')
+const strictKnowledgeReply = ref(false)
 const isGenerating = ref(false)
-const replies = ref<{ style: string; reply: string }[]>([])
+interface ReplyCandidate {
+  style: string
+  reply: string
+  sourceLabel?: string
+  matchScore?: number
+}
+
+const replies = ref<ReplyCandidate[]>([])
+const contextMatches = ref<CommunicationContextMatches>({ phrasebook: [], knowledge: [] })
 const isRerollingIndex = ref<number | null>(null)
 const isListening = ref(false)
 const pastedImage = ref<string | null>(null)
@@ -265,6 +330,12 @@ const styles = [
   { value: 'empathetic', label: '共情' }
 ]
 
+const responseModes: Array<{ value: ResponseMode; label: string }> = [
+  { value: 'fast', label: '快速' },
+  { value: 'balanced', label: '标准' },
+  { value: 'deep', label: '深度' }
+]
+
 const replyIntents = [
   { value: 'natural', label: '自然接话' },
   { value: 'comfort', label: '安抚' },
@@ -285,13 +356,49 @@ const getStyleLabel = (style: string): string => {
     formal: '正式风格',
     humorous: '幽默风格',
     concise: '简洁风格',
-    empathetic: '共情风格'
+    empathetic: '共情风格',
+    standard: '标准话术'
   }
   return styleMap[style] || '默认风格'
 }
 
+const getModeLabel = (mode: ResponseMode): string => {
+  if (mode === 'fast') return '快速'
+  if (mode === 'deep') return '深度'
+  return '标准'
+}
+
+const modeSuggestion = computed<ResponseMode | null>(() => {
+  const baseText = parsedChats.value.length
+    ? parsedChats.value.map(item => item.text).join('\n')
+    : inputText.value
+  const text = baseText.trim()
+  if (!text) return null
+  if (scamWarning.value?.level === 'high') return 'deep'
+  if (text.length <= 60) return 'fast'
+  if (text.length >= 260 || parsedChats.value.length >= 8) return 'deep'
+  return 'balanced'
+})
+
+const setResponseMode = (mode: ResponseMode) => {
+  responseMode.value = mode
+  localStorage.setItem('reply:responseMode', mode)
+}
+
+const getTopReferenceLabel = () => {
+  const phraseTop = contextMatches.value.phrasebook.slice(0, 1).map(item => `话术本·${item.keyword}`)
+  const knowledgeTop = contextMatches.value.knowledge.slice(0, 1).map(item => `知识库·${item.title}`)
+  const labels = [...phraseTop, ...knowledgeTop]
+  return labels.length ? `来源：${labels.join(' / ')}` : undefined
+}
+
 onMounted(() => {
   console.log('[Reply] 页面加载完成')
+  const cachedMode = localStorage.getItem('reply:responseMode')
+  if (cachedMode === 'fast' || cachedMode === 'balanced' || cachedMode === 'deep') {
+    responseMode.value = cachedMode
+  }
+  strictKnowledgeReply.value = localStorage.getItem('reply:strictKnowledgeReply') === '1'
   StyleLearner.init()
   // 如果有足够的学习数据，默认使用推荐风格
   if (StyleLearner.hasEnoughData()) {
@@ -344,6 +451,10 @@ watch(inputText, (newText) => {
   } else {
     scamWarning.value = null
   }
+})
+
+watch(strictKnowledgeReply, (enabled) => {
+  localStorage.setItem('reply:strictKnowledgeReply', enabled ? '1' : '0')
 })
 
 // 应用情绪推荐的风格
@@ -844,6 +955,19 @@ const buildReplyContext = (): string => {
   return `${base}${extra}${intent}${target}`.trim()
 }
 
+const enrichContextWithReferences = async (context: string) => {
+  const matches = await retrieveCommunicationContext(context, { mode: responseMode.value })
+  contextMatches.value = matches
+  const referenceBlock = formatMatchesForPrompt(matches)
+  if (!referenceBlock) return context
+
+  const strictInstruction = strictKnowledgeReply.value
+    ? '\n\n【严格约束】必须严格依据以上资料作答。资料没有明确说明的内容，不要编造。'
+    : ''
+
+  return `${context}\n\n${referenceBlock}${strictInstruction}`.trim()
+}
+
 const generateReply = async () => {
   if (!canGenerate.value) return
 
@@ -867,18 +991,39 @@ const generateReply = async () => {
       console.log('[Reply] 整理后的聊天记录:', context.substring(0, 100))
     }
 
-    const imageForAI = context.trim() ? undefined : pastedImage.value || undefined
+    const plainContext = context
+    context = await enrichContextWithReferences(context)
+    const directPhraseReplies: ReplyCandidate[] = contextMatches.value.phrasebook
+      .slice(0, 1)
+      .map(item => ({
+        style: 'standard',
+        reply: item.content,
+        sourceLabel: `话术本 ${item.score}`,
+        matchScore: item.score
+      }))
+
+    const imageForAI = plainContext.trim() ? undefined : pastedImage.value || undefined
 
     console.log(`[Reply] 正在生成回复... 风格: ${selectedStyle.value}`)
     const result = await window.electronAPI?.ai?.generateReply?.(
       context,
       selectedStyle.value,
+      responseMode.value,
       imageForAI
     )
+    const sourceLabel = getTopReferenceLabel()
 
     if (result && result.length > 0) {
-      replies.value = result
+      replies.value = [
+        ...directPhraseReplies,
+        ...result.map(item => ({
+          ...item,
+          sourceLabel
+        }))
+      ]
       console.log(`[Reply] 生成了 ${result.length} 条回复，风格:`, result.map(r => r.style))
+    } else if (directPhraseReplies.length) {
+      replies.value = directPhraseReplies
     } else {
       // 兜底：如果 API 没返回，显示引导
       replies.value = [
@@ -911,13 +1056,20 @@ const rerollReply = async (index: number) => {
 
   isRerollingIndex.value = index
   try {
+    const baseContext = buildReplyContext()
+    const context = await enrichContextWithReferences(baseContext)
     const result = await window.electronAPI?.ai?.generateReply?.(
-      buildReplyContext(),
+      context,
       current.style,
+      responseMode.value,
       undefined
     )
     if (result?.[0]?.reply) {
-      replies.value[index] = { style: current.style, reply: result[0].reply }
+      replies.value[index] = {
+        style: current.style,
+        reply: result[0].reply,
+        sourceLabel: getTopReferenceLabel() || current.sourceLabel
+      }
     }
   } catch (e: any) {
     console.error('[Reply] 换一句失败:', e)
@@ -938,21 +1090,6 @@ const copyReply = async (reply: string) => {
     toast.success('已复制到剪贴板')
   } catch (e) {
     console.error('[Reply] 复制失败:', e)
-  }
-}
-
-const pasteReply = async (reply: string) => {
-  try {
-    await window.electronAPI?.clipboard?.setText?.(reply)
-    await window.electronAPI?.clipboard?.paste?.()
-    // 记录用户选择的回复风格
-    const replyItem = replies.value.find(r => r.reply === reply)
-    if (replyItem && replyItem.style !== 'all') {
-      StyleLearner.recordChoice(replyItem.style)
-    }
-    console.log('[Reply] 已粘贴到微信')
-  } catch (e) {
-    console.error('[Reply] 粘贴失败:', e)
   }
 }
 
@@ -1314,6 +1451,11 @@ const goToSettings = () => {
   border: 1px solid rgba(124, 58, 237, 0.18);
 }
 
+.mode-hint-row {
+  background: rgba(14, 116, 144, 0.08);
+  border: 1px solid rgba(14, 116, 144, 0.18);
+}
+
 .risk-medium {
   background: var(--warning-bg);
   border: 1px solid rgba(180, 83, 9, 0.18);
@@ -1368,6 +1510,27 @@ const goToSettings = () => {
 
 .style-selector {
   margin-top: var(--space-4);
+}
+
+.strict-knowledge-toggle {
+  margin-top: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid var(--border-color);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.strict-knowledge-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
 }
 
 .intent-selector {
@@ -1447,6 +1610,53 @@ const goToSettings = () => {
   gap: var(--space-3);
 }
 
+.context-match-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 248, 232, 0.78);
+  border: 1px solid rgba(180, 83, 9, 0.12);
+}
+
+.context-match-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--warning);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.context-match-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.context-chip,
+.source-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 700;
+}
+
+.context-chip.phrase,
+.source-tag {
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--primary-dark);
+}
+
+.context-chip.knowledge {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--info);
+}
+
 .reply-card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 242, 234, 0.78) 100%);
   border-radius: var(--radius-xl);
@@ -1523,6 +1733,15 @@ const goToSettings = () => {
 .style-tag.empathetic {
   background: var(--secondary-bg);
   color: var(--secondary-dark);
+}
+
+.style-tag.standard {
+  background: rgba(15, 118, 110, 0.14);
+  color: var(--primary-dark);
+}
+
+.source-tag {
+  margin-left: var(--space-2);
 }
 
 .reply-content {
@@ -1723,3 +1942,7 @@ const goToSettings = () => {
   }
 }
 </style>
+  const cachedMode = localStorage.getItem('reply:responseMode')
+  if (cachedMode === 'fast' || cachedMode === 'balanced' || cachedMode === 'deep') {
+    responseMode.value = cachedMode
+  }

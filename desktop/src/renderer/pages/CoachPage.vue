@@ -60,6 +60,16 @@
             <option value="">默认分析</option>
             <option v-for="skill in availableSkills" :key="skill">{{ skill }}</option>
           </select>
+          <div class="coach-mode-switch">
+            <button
+              v-for="mode in responseModes"
+              :key="mode.value"
+              :class="{ active: responseMode === mode.value }"
+              @click="setResponseMode(mode.value)"
+            >
+              {{ mode.label }}
+            </button>
+          </div>
           <button class="call-open-btn" @click="openCallPanel">
             通话
           </button>
@@ -67,10 +77,14 @@
 
         <div class="coach-input-card">
           <textarea v-model="inputText" placeholder="输入对方说的话..." rows="3" @keydown.ctrl.enter="sendMessage"></textarea>
+          <div v-if="coachModeSuggestion && coachModeSuggestion !== responseMode" class="coach-mode-hint">
+            <span>建议切到「{{ responseModeLabelByValue(coachModeSuggestion) }}」来处理当前内容。</span>
+            <button @click="setResponseMode(coachModeSuggestion)">一键切换</button>
+          </div>
           <div class="input-footer">
-            <span>{{ selectedSkill || '默认分析' }}</span>
+            <span>{{ selectedSkill || '默认分析' }} · {{ responseModeLabel }}</span>
             <button :disabled="!inputText.trim() || isSending" @click="sendMessage">
-              {{ isSending ? '分析中...' : '发送分析' }}
+              {{ isSending ? `${responseModeLabel}分析中...` : '发送分析' }}
             </button>
           </div>
         </div>
@@ -97,12 +111,32 @@
             <button :class="{ active: callSpeaker === 'me' }" @click="callSpeaker = 'me'">我说</button>
           </div>
           <label class="auto-toggle">
+            <input v-model="callNoiseGateEnabled" type="checkbox" />
+            低音量过滤
+          </label>
+          <label class="auto-toggle">
             <input v-model="callAutoAnalyze" type="checkbox" />
             自动分析
           </label>
         </div>
 
+        <div class="hotword-panel">
+          <div class="hotword-head">
+            <span class="call-section-title">热词纠错</span>
+            <button class="call-secondary-btn" @click="addHotwordRule">新增</button>
+          </div>
+          <div class="hotword-list">
+            <div v-for="(rule, idx) in hotwordRules" :key="idx" class="hotword-item">
+              <input v-model="rule.from" class="hotword-input" placeholder="易错词" @blur="saveHotwordRules" />
+              <span class="hotword-arrow">→</span>
+              <input v-model="rule.to" class="hotword-input" placeholder="目标词" @blur="saveHotwordRules" />
+              <button class="hotword-delete" @click="removeHotwordRule(idx)">删</button>
+            </div>
+          </div>
+        </div>
+
         <div v-if="callError" class="call-error">{{ callError }}</div>
+        <div v-else-if="callHint" class="call-hint">{{ callHint }}</div>
 
         <div class="call-live">
           <span class="call-live-label">{{ isListeningSpeech ? '正在听' : '转写' }}</span>
@@ -144,7 +178,16 @@
         </div>
 
         <div class="call-suggestion">
-          <div class="call-section-title">当前建议</div>
+          <div class="call-suggestion-head">
+            <div class="call-section-title">当前建议</div>
+            <button
+              class="call-copy-btn"
+              :disabled="!latestAnalysis?.replies?.length"
+              @click="copyCurrentSuggestion"
+            >
+              复制
+            </button>
+          </div>
           <div v-if="isCallAnalyzing" class="call-muted">正在分析...</div>
           <div v-else-if="latestAnalysis?.replies?.length" class="call-suggestion-text">
             {{ latestAnalysis.replies[0].content }}
@@ -181,6 +224,26 @@
               <div class="intent-item"><span class="intent-label">情绪</span><span class="orange">{{ latestAnalysis?.emotion || '--' }}</span></div>
               <div class="intent-item"><span class="intent-label">真实</span><span class="red">{{ latestAnalysis?.realIntent || '--' }}</span></div>
               <div class="intent-item"><span class="intent-label">需求</span><span>{{ latestAnalysis?.needs || '--' }}</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="latestContextMatches.phrasebook.length || latestContextMatches.knowledge.length" class="card reference-card">
+          <div class="card-title">参考资料</div>
+          <div class="reference-list">
+            <div v-for="item in latestContextMatches.knowledge" :key="`knowledge-${item.id || item.title}`" class="reference-item">
+              <span class="reference-tag">知识库</span>
+              <div>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.content }}</p>
+              </div>
+            </div>
+            <div v-for="item in latestContextMatches.phrasebook" :key="`phrase-${item.id || item.keyword}`" class="reference-item">
+              <span class="reference-tag phrase">话术本</span>
+              <div>
+                <strong>{{ item.keyword }}</strong>
+                <p>{{ item.content }}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -349,21 +412,30 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { CoachStorage } from '../utils/coach-storage'
 import { useToast } from '../composables/useToast'
+import { ContactStorage } from '../utils/contact-storage'
 // OCR 功能暂隐藏
 // import OCRResultModal from '../components/OCRResultModal.vue'
 import '../skills/puachat-master.skill'
 import '../skills/top-sales-chat.skill'
 import { getSkillNames, getSkill } from '../skills/skill-loader'
+import {
+  formatMatchesForPrompt,
+  retrieveCommunicationContext,
+  type CommunicationContextMatches,
+  type ResponseMode
+} from '../utils/context-retrieval'
 
 const toast = useToast()
+const route = useRoute()
 
 const goals = ref<any[]>([])
 const currentGoalId = ref<number | ''>('')
 const currentGoal = ref<any>(null)
 const latestAnalysis = ref<any>(null)
+const latestContextMatches = ref<CommunicationContextMatches>({ phrasebook: [], knowledge: [] })
 const inputText = ref('')
 const isSending = ref(false)
 const showNewGoalModal = ref(false)
@@ -374,6 +446,7 @@ const newGoalContent = ref('')
 const editGoalName = ref('')
 const editGoalContent = ref('')
 const selectedSkill = ref('')
+const responseMode = ref<ResponseMode>('balanced')
 const availableSkills = ref<string[]>([])
 const showHistory = ref(false)
 const showAnalysisModal = ref(false)
@@ -385,9 +458,12 @@ const isStartingSpeech = ref(false)
 const isStoppingSpeech = ref(false)
 const callSpeaker = ref<'them' | 'me'>('them')
 const callAutoAnalyze = ref(true)
+const callNoiseGateEnabled = ref(true)
 const callTranscriptDraft = ref('')
 const callError = ref('')
+const callHint = ref('')
 const callRecentMessages = ref<ChatItem[]>([])
+const hotwordRules = ref<Array<{ from: string; to: string }>>([])
 const isCallAnalyzing = ref(false)
 const pendingCallAnalysis = ref(false)
 const asrStatus = ref<any>(null)
@@ -412,6 +488,15 @@ let callWorkletUrl = ''
 let isPushingAudio = false
 let pendingCallAudioBuffers: ArrayBuffer[] = []
 const maxPendingCallAudioBytes = 16000 * 2 * 8
+let lowVolumeStreak = 0
+let lowVolumeHintCooldown = 0
+const noiseGateThreshold = 0.008
+const HOTWORD_STORAGE_KEY = 'coach:asrHotwords'
+const defaultHotwordRules = [
+  { from: '扣子', to: 'Coze' },
+  { from: '口子', to: 'Coze' },
+  { from: '扣字', to: 'Coze' }
+]
 
 // 剪贴板监听相关
 const isMonitorActive = ref(false)
@@ -443,6 +528,66 @@ interface ConversationBounds {
   right: number
   top: number
   bottom: number
+}
+
+const responseModes: Array<{ value: ResponseMode; label: string }> = [
+  { value: 'fast', label: '快速' },
+  { value: 'balanced', label: '标准' },
+  { value: 'deep', label: '深度' }
+]
+const responseModeLabel = computed(() => responseModes.find(item => item.value === responseMode.value)?.label || '标准')
+const responseModeLabelByValue = (mode: ResponseMode) => responseModes.find(item => item.value === mode)?.label || '标准'
+const coachModeSuggestion = computed<ResponseMode | null>(() => {
+  const text = inputText.value.trim()
+  if (!text) return null
+  if (/(合同|退款|赔偿|承诺|报警|转账|借钱|隐私|风险)/.test(text)) return 'deep'
+  if (text.length <= 36) return 'fast'
+  if (text.length >= 180) return 'deep'
+  return 'balanced'
+})
+
+const setResponseMode = (mode: ResponseMode) => {
+  responseMode.value = mode
+  localStorage.setItem('coach:responseMode', mode)
+}
+
+const loadHotwordRules = () => {
+  try {
+    const raw = localStorage.getItem(HOTWORD_STORAGE_KEY)
+    if (!raw) {
+      hotwordRules.value = [...defaultHotwordRules]
+      return
+    }
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      hotwordRules.value = parsed
+        .filter(item => item && typeof item.from === 'string' && typeof item.to === 'string')
+        .map(item => ({ from: item.from.trim(), to: item.to.trim() }))
+        .filter(item => item.from && item.to)
+      if (!hotwordRules.value.length) {
+        hotwordRules.value = [...defaultHotwordRules]
+      }
+    }
+  } catch {
+    hotwordRules.value = [...defaultHotwordRules]
+  }
+}
+
+const saveHotwordRules = () => {
+  const next = hotwordRules.value
+    .map(item => ({ from: item.from.trim(), to: item.to.trim() }))
+    .filter(item => item.from && item.to)
+  hotwordRules.value = next
+  localStorage.setItem(HOTWORD_STORAGE_KEY, JSON.stringify(next))
+}
+
+const addHotwordRule = () => {
+  hotwordRules.value.push({ from: '', to: '' })
+}
+
+const removeHotwordRule = (index: number) => {
+  hotwordRules.value.splice(index, 1)
+  saveHotwordRules()
 }
 
 // OCR 功能暂隐藏
@@ -478,6 +623,21 @@ const loadSkills = () => {
 
 const toggleHistory = () => { showHistory.value = !showHistory.value }
 const loadGoals = async () => { goals.value = await CoachStorage.getGoals() }
+const bindContactGoalFromRoute = async () => {
+  const raw = route.query.contactId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const contactId = Number(value)
+  if (!contactId || Number.isNaN(contactId)) return false
+
+  const contact = await ContactStorage.getContact(contactId)
+  if (!contact) return false
+
+  const goal = await CoachStorage.getOrCreateGoalByContact(contactId, contact.name)
+  currentGoalId.value = goal.id || ''
+  await onGoalChange()
+  return true
+}
+
 const onGoalChange = async () => {
   if (!currentGoalId.value) { currentGoal.value = null; latestAnalysis.value = null; return }
   const goal = await CoachStorage.getGoal(currentGoalId.value)
@@ -553,7 +713,10 @@ const analyzeAllMessages = async () => {
     }
 
     // 调用 AI 整体分析
-    const result = await window.electronAPI?.ai?.analyzeOverall(history, currentGoal.value.goal)
+    const result = await window.electronAPI?.ai?.analyzeOverall(
+      history,
+      await buildGoalTextWithSkill(history.map(item => item.content).join('\n'))
+    )
 
     if (result?.success === false && result?.error) {
       toast.error('整体分析失败：' + result.error)
@@ -570,7 +733,13 @@ const analyzeAllMessages = async () => {
   }
 }
 
-const buildGoalTextWithSkill = (): string => {
+const getSceneFromSkill = () => {
+  if (selectedSkill.value.includes('销售')) return '销售'
+  if (selectedSkill.value.includes('恋爱')) return '恋爱'
+  return '全部'
+}
+
+const buildGoalTextWithSkill = async (query = ''): Promise<string> => {
   let goalText = currentGoal.value?.goal || ''
   if (selectedSkill.value) {
     const skill = getSkill(selectedSkill.value)
@@ -578,6 +747,17 @@ const buildGoalTextWithSkill = (): string => {
       goalText = `${goalText}\n\n【使用技能：${selectedSkill.value}】\n\n${skill.prompts.system}`
     }
   }
+
+  const matches = await retrieveCommunicationContext(
+    `${currentGoal.value?.goal || ''}\n${query}`,
+    { scene: getSceneFromSkill(), mode: responseMode.value }
+  )
+  latestContextMatches.value = matches
+  const referenceBlock = formatMatchesForPrompt(matches)
+  if (referenceBlock) {
+    goalText = `${goalText}\n\n${referenceBlock}`
+  }
+
   return goalText
 }
 
@@ -589,7 +769,8 @@ const analyzeCurrentGoal = async (extraMessage?: { role: string; content: string
     history.push(extraMessage)
   }
 
-  const result = await (window as any).electronAPI?.ai?.analyzeIntent?.(history, buildGoalTextWithSkill())
+  const query = history.map(item => item.content).join('\n')
+  const result = await (window as any).electronAPI?.ai?.analyzeIntent?.(history, await buildGoalTextWithSkill(query), responseMode.value)
   if (result?.success === false && result?.error) {
     toast.error('分析失败：' + result.error)
     return null
@@ -637,10 +818,37 @@ const sendReply = async (reply: any, idx: number) => {
     currentGoal.value.messages.push(msg)
   }
 }
+
+const copyCurrentSuggestion = async () => {
+  const text = latestAnalysis.value?.replies?.[0]?.content?.trim()
+  if (!text || !currentGoal.value) return
+
+  try {
+    await (window as any).electronAPI?.clipboard?.setText?.(text)
+    const message = {
+      role: 'assistant',
+      content: `[复制当前建议]: ${text}`,
+      timestamp: Date.now()
+    }
+    await CoachStorage.addMessage(currentGoal.value.id, message)
+    currentGoal.value.messages.push(message)
+    toast.success('已复制当前建议')
+  } catch (e: any) {
+    console.error('复制当前建议失败:', e)
+    toast.error('复制失败，请重试')
+  }
+}
 onMounted(async () => {
+  const cachedMode = localStorage.getItem('coach:responseMode')
+  if (cachedMode === 'fast' || cachedMode === 'balanced' || cachedMode === 'deep') {
+    responseMode.value = cachedMode
+  }
+  loadHotwordRules()
+
   await loadGoals()
   loadSkills()
-  if (goals.value.length) {
+  const bound = await bindContactGoalFromRoute()
+  if (!bound && goals.value.length) {
     currentGoalId.value = goals.value[0].id
     await onGoalChange()
   }
@@ -811,10 +1019,46 @@ const getCallStartErrorMessage = (error: any) => {
   return message || '本地语音识别启动失败，请稍后重试。'
 }
 
+const applyCallHotwordCorrections = (text: string) => {
+  let next = text
+  for (const rule of hotwordRules.value) {
+    const from = rule.from.trim()
+    const to = rule.to.trim()
+    if (!from || !to) continue
+    next = next.replace(new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), to)
+  }
+  return next
+}
+
+const calcRms = (input: Float32Array) => {
+  if (!input.length) return 0
+  let sum = 0
+  for (let i = 0; i < input.length; i++) {
+    sum += input[i] * input[i]
+  }
+  return Math.sqrt(sum / input.length)
+}
+
 const handleCallAudioWorkletMessage = (event: MessageEvent<ArrayBuffer>) => {
   if (!localAsrSessionId) return
 
   const input = new Float32Array(event.data)
+  if (callNoiseGateEnabled.value) {
+    const rms = calcRms(input)
+    if (rms < noiseGateThreshold) {
+      lowVolumeStreak += 1
+      if (lowVolumeStreak >= 10 && Date.now() > lowVolumeHintCooldown) {
+        callHint.value = '当前音量偏低，建议靠近麦克风或提高说话音量。'
+        lowVolumeHintCooldown = Date.now() + 5000
+      }
+      return
+    }
+  }
+  lowVolumeStreak = 0
+  if (callHint.value.includes('音量偏低')) {
+    callHint.value = ''
+  }
+
   const pcm = convertFloatTo16BitPCM(downsampleBuffer(input, callAudioContext?.sampleRate || 44100, 16000))
   const audioBuffer = pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength) as ArrayBuffer
   pendingCallAudioBuffers.push(audioBuffer)
@@ -843,10 +1087,14 @@ const flushCallAudioQueue = async () => {
         return
       }
       if (result.isFinal && result.text?.trim()) {
-        callTranscriptDraft.value = result.text.trim()
-        await commitCallDraft()
+        callTranscriptDraft.value = applyCallHotwordCorrections(result.text.trim())
+        if (callAutoAnalyze.value) {
+          await commitCallDraft()
+        } else {
+          callHint.value = '已转写到草稿，确认后点“加入并分析”。'
+        }
       } else if (result.partial?.trim()) {
-        callTranscriptDraft.value = result.partial.trim()
+        callTranscriptDraft.value = applyCallHotwordCorrections(result.partial.trim())
       }
     }
   } catch (e: any) {
@@ -927,8 +1175,12 @@ const stopCallListening = async (commitFinal = true) => {
     if (localAsrSessionId) {
       const result = await window.electronAPI?.asr?.stop?.(localAsrSessionId)
       if (commitFinal && result?.text?.trim()) {
-        callTranscriptDraft.value = result.text.trim()
-        await commitCallDraft()
+        callTranscriptDraft.value = applyCallHotwordCorrections(result.text.trim())
+        if (callAutoAnalyze.value) {
+          await commitCallDraft()
+        } else {
+          callHint.value = '已转写到草稿，确认后点“加入并分析”。'
+        }
       }
     }
   } catch (e) {
@@ -951,6 +1203,7 @@ const stopCallMode = () => {
   void stopCallListening(false)
   callTranscriptDraft.value = ''
   callError.value = ''
+  callHint.value = ''
 }
 
 const commitCallDraft = async () => {
@@ -1515,6 +1768,7 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
 .skill-selector {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding: 0;
   background: transparent;
@@ -1530,7 +1784,8 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
 }
 
 .skill-select {
-  flex: 1;
+  flex: 1 1 180px;
+  min-width: 150px;
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -1547,8 +1802,34 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
   box-shadow: 0 0 0 3px var(--primary-bg);
 }
 
+.coach-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  gap: 6px;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border-color);
+}
+
+.coach-mode-switch button {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.coach-mode-switch button.active {
+  background: var(--primary-gradient);
+  color: white;
+}
+
 .call-open-btn {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   min-height: 40px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-md);
@@ -1557,6 +1838,30 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
   font-size: var(--font-sm);
   font-weight: 700;
   box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 920px) {
+  .skill-selector {
+    gap: var(--space-2);
+  }
+
+  .skill-label {
+    flex: 0 0 auto;
+  }
+
+  .skill-select {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .coach-mode-switch {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .call-open-btn {
+    margin-left: auto;
+  }
 }
 
 .coach-input-card {
@@ -1581,6 +1886,30 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
 
 .coach-input-card textarea::placeholder {
   color: var(--text-tertiary);
+}
+
+.coach-mode-hint {
+  margin-top: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(14, 116, 144, 0.08);
+  border: 1px solid rgba(14, 116, 144, 0.16);
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+.coach-mode-hint button {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  background: var(--primary-gradient);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .call-panel {
@@ -1707,6 +2036,69 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
   line-height: 1.5;
 }
 
+.call-hint {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgba(14, 116, 144, 0.08);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  line-height: 1.5;
+}
+
+.hotword-panel {
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--border-light);
+}
+
+.hotword-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.hotword-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hotword-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.hotword-input {
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.hotword-arrow {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.hotword-delete {
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(180, 35, 24, 0.08);
+  border: 1px solid rgba(180, 35, 24, 0.18);
+  color: var(--error);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .call-live {
   padding: var(--space-3);
   border-radius: var(--radius-md);
@@ -1801,6 +2193,29 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
   border-radius: var(--radius-md);
   background: linear-gradient(135deg, var(--success-bg) 0%, #dcfce7 100%);
   border: 1px solid rgba(22, 163, 74, 0.18);
+}
+
+.call-suggestion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.call-copy-btn {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(22, 163, 74, 0.24);
+  color: var(--success);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.call-copy-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .call-suggestion-text {
@@ -2026,6 +2441,10 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
   border-top: 3px solid var(--success);
 }
 
+.reference-card {
+  border-top: 3px solid var(--warning);
+}
+
 .card-title {
   font-size: var(--font-sm);
   font-weight: 600;
@@ -2181,6 +2600,54 @@ const mergeShortOCRFragments = (chats: ChatItem[]): ChatItem[] => {
   font-size: var(--font-xs);
   color: var(--secondary-dark);
   font-weight: 500;
+}
+
+.reference-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.reference-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: rgba(255, 248, 232, 0.7);
+  border: 1px solid rgba(180, 83, 9, 0.12);
+}
+
+.reference-tag {
+  align-self: flex-start;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.reference-tag.phrase {
+  color: var(--primary-dark);
+  background: var(--primary-bg);
+}
+
+.reference-item strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--font-xs);
+  color: var(--text-primary);
+}
+
+.reference-item p {
+  margin: 0;
+  font-size: var(--font-xs);
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
 
 /* 推荐话术 */

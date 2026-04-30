@@ -24,6 +24,7 @@ export interface CoachMessage {
 export interface CoachGoal {
   id?: number
   name: string
+  contactId?: number
   goal: string
   status: 'active' | 'completed' | 'archived'
   messages: CoachMessage[]
@@ -45,9 +46,10 @@ class CoachDatabase extends Dexie {
 export const coachDB = new CoachDatabase()
 
 export class CoachStorage {
-  static async createGoal(name: string, goal: string): Promise<number> {
+  static async createGoal(name: string, goal: string, contactId?: number): Promise<number> {
     const goalObj: CoachGoal = {
       name,
+      contactId,
       goal,
       status: 'active',
       messages: [],
@@ -55,6 +57,21 @@ export class CoachStorage {
       updatedAt: Date.now()
     }
     return await coachDB.goals.add(goalObj)
+  }
+
+  static async findGoalByContactId(contactId: number): Promise<CoachGoal | undefined> {
+    const goals = await this.getGoals()
+    return goals.find(goal => goal.contactId === contactId)
+  }
+
+  static async getOrCreateGoalByContact(contactId: number, contactName: string): Promise<CoachGoal> {
+    const existed = await this.findGoalByContactId(contactId)
+    if (existed) return existed
+
+    const id = await this.createGoal(contactName, '基于联系人档案进行沟通分析', contactId)
+    const created = await this.getGoal(id)
+    if (!created) throw new Error('Failed to create coach goal for contact')
+    return created
   }
 
   static async getGoals(): Promise<CoachGoal[]> {

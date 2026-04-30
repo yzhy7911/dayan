@@ -11,16 +11,16 @@
 
       <div class="hero-stats">
         <div class="hero-stat-card">
-          <span class="stat-label">全部话术</span>
-          <strong class="stat-value">{{ totalKnowledgeCount }}</strong>
+          <span class="stat-label">{{ activeLibraryTab === 'phrasebook' ? '全部话术' : '全部资料' }}</span>
+          <strong class="stat-value">{{ totalAssetCount }}</strong>
         </div>
         <div class="hero-stat-card">
           <span class="stat-label">当前筛选</span>
-          <strong class="stat-value">{{ filteredKnowledge.length }}</strong>
+          <strong class="stat-value">{{ filteredAssetCount }}</strong>
         </div>
         <div class="hero-stat-card">
-          <span class="stat-label">当前分类</span>
-          <strong class="stat-value">{{ selectedCategory }}</strong>
+          <span class="stat-label">当前视图</span>
+          <strong class="stat-value">{{ activeLibraryTab === 'phrasebook' ? selectedCategory : '知识库' }}</strong>
         </div>
         <div class="hero-stat-card">
           <span class="stat-label">导入策略</span>
@@ -33,9 +33,9 @@
       <div class="control-head">
         <div>
           <p class="section-kicker">Browse & Curate</p>
-          <h2 class="section-title">内容检索与管理</h2>
+          <h2 class="section-title">{{ activeLibraryTab === 'phrasebook' ? '话术本检索与管理' : '知识库资料预览' }}</h2>
         </div>
-        <div class="action-group">
+        <div v-if="activeLibraryTab === 'phrasebook'" class="action-group">
           <button class="btn btn-secondary" @click="triggerFileImport">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M10 3v9" />
@@ -60,6 +60,55 @@
             新建
           </button>
         </div>
+        <div v-else class="action-group">
+          <button class="btn btn-secondary" @click="triggerFileImport">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 3v9" />
+              <path d="M6.5 8.5 10 12l3.5-3.5" />
+              <path d="M3.5 15.5h13" />
+            </svg>
+            导入
+          </button>
+          <button
+            class="btn btn-secondary"
+            :disabled="!pendingKnowledgeDocuments.length || isBatchRefiningDocs"
+            @click="batchRefineKnowledgeDocuments"
+          >
+            {{ isBatchRefiningDocs ? '整理中' : '批量整理' }}
+          </button>
+          <button class="btn btn-primary" @click="openKnowledgeDocModal()">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M10 4.5v11" />
+              <path d="M4.5 10h11" />
+            </svg>
+            新建
+          </button>
+          <button class="btn btn-primary" :disabled="!enabledKnowledgeDocuments.length || isGeneratingPhraseDrafts" @click="generatePhraseDraftsFromKnowledge()">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 3.5v13" />
+              <path d="M4.5 8.5h11" />
+              <path d="M6 14.5h8" />
+            </svg>
+            提炼
+          </button>
+        </div>
+      </div>
+
+      <div class="asset-tabs">
+        <button
+          class="asset-tab"
+          :class="{ active: activeLibraryTab === 'phrasebook' }"
+          @click="activeLibraryTab = 'phrasebook'"
+        >
+          话术本
+        </button>
+        <button
+          class="asset-tab"
+          :class="{ active: activeLibraryTab === 'knowledge' }"
+          @click="activeLibraryTab = 'knowledge'"
+        >
+          知识库
+        </button>
       </div>
 
       <div class="search-row">
@@ -77,12 +126,12 @@
         </label>
 
         <div class="search-meta">
-          <span class="result-chip">{{ filteredKnowledge.length }} 条结果</span>
+          <span class="result-chip">{{ filteredAssetCount }} 条结果</span>
           <span v-if="searchKeyword" class="result-tip">匹配 “{{ searchKeyword }}”</span>
         </div>
       </div>
 
-      <div class="category-cluster">
+      <div v-if="activeLibraryTab === 'phrasebook'" class="category-cluster">
         <button
           v-for="cat in categories"
           :key="cat"
@@ -101,12 +150,12 @@
         <div class="panel-head">
           <div>
             <p class="section-kicker">Library</p>
-            <h3 class="section-title">话术列表</h3>
+            <h3 class="section-title">{{ activeLibraryTab === 'phrasebook' ? '话术列表' : '知识资料' }}</h3>
           </div>
-          <span class="panel-meta">{{ selectedCategory === '全部' ? '全量视图' : `${selectedCategory} 分类` }}</span>
+          <span class="panel-meta">{{ activePanelMeta }}</span>
         </div>
 
-        <div v-if="filteredKnowledge.length" class="knowledge-grid">
+        <div v-if="activeLibraryTab === 'phrasebook' && filteredKnowledge.length" class="knowledge-grid">
           <article v-for="item in filteredKnowledge" :key="item.id" class="knowledge-card">
             <div class="knowledge-card-head">
               <div class="keyword-wrap">
@@ -140,6 +189,66 @@
           </article>
         </div>
 
+        <div v-else-if="activeLibraryTab === 'knowledge' && filteredKnowledgeDocuments.length" class="knowledge-grid">
+          <article v-for="item in filteredKnowledgeDocuments" :key="item.id" class="knowledge-card document-card">
+            <div class="knowledge-card-head">
+              <div class="keyword-wrap">
+                <span class="knowledge-category" :class="{ disabled: !item.enabled }">{{ item.enabled ? `${item.scene} / ${item.type}` : '已停用' }}</span>
+                <h4 class="knowledge-keyword">{{ item.title }}</h4>
+              </div>
+              <div class="card-action-row">
+                <button class="icon-action" @click="toggleKnowledgeDocument(item)" :title="item.enabled ? '停用' : '启用'">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 10s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
+                    <circle cx="10" cy="10" r="2.2" />
+                  </svg>
+                </button>
+                <button class="icon-action" @click="openKnowledgeDocModal(item)" title="编辑">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 14.5V16h1.5L14.8 6.7l-1.5-1.5L4 14.5z" />
+                    <path d="M12.8 5.2 14.3 3.7a1.2 1.2 0 0 1 1.7 1.7l-1.5 1.5" />
+                  </svg>
+                </button>
+                <button class="icon-action danger" @click="deleteKnowledgeDocumentItem(item)" title="删除">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4.5 5.5h11" />
+                    <path d="M7.5 5.5V4.4c0-.5.4-.9.9-.9h3.2c.5 0 .9.4.9.9v1.1" />
+                    <path d="M6.5 7.5v7" />
+                    <path d="M10 7.5v7" />
+                    <path d="M13.5 7.5v7" />
+                    <path d="M5.5 5.5v9.2c0 1 .8 1.8 1.8 1.8h5.4c1 0 1.8-.8 1.8-1.8V5.5" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <p class="knowledge-content">{{ item.content }}</p>
+
+            <div class="knowledge-card-foot">
+              <span class="asset-note">{{ item.source || '本地知识库' }}</span>
+              <div class="foot-actions">
+                <button
+                  class="card-copy-btn"
+                  :disabled="refiningDocId === item.id"
+                  @click="refineKnowledgeDocumentItem(item)"
+                >
+                  {{ refiningDocId === item.id ? '整理中...' : 'AI整理' }}
+                </button>
+                <button class="card-copy-btn" @click="generatePhraseDraftsFromKnowledge([item])">
+                  提炼话术
+                </button>
+                <button class="card-copy-btn" @click="copyKnowledge(item.content)">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="7" y="7" width="9" height="9" rx="2" />
+                    <path d="M5.5 12V6.8c0-1 .8-1.8 1.8-1.8h5.2" />
+                  </svg>
+                  复制资料
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+
         <div v-else-if="!isLoading" class="empty-state">
           <div class="empty-mark">
             <svg viewBox="0 0 64 64" fill="none">
@@ -149,9 +258,10 @@
               <path d="M22 40h10" stroke="#0f766e" stroke-width="2.6" stroke-linecap="round" opacity="0.4" />
             </svg>
           </div>
-          <h4 class="empty-title">还没有可展示的话术</h4>
-          <p class="empty-text">可以先新建一条，或者通过导入把已有表达整理进来。</p>
-          <button class="btn btn-primary" @click="openAddModal">立即添加</button>
+          <h4 class="empty-title">还没有可展示的内容</h4>
+          <p class="empty-text">{{ activeLibraryTab === 'phrasebook' ? '可以先新建一条，或者通过导入把已有表达整理进来。' : '可以先新建一条资料，后续回复和军师会用它作为依据。' }}</p>
+          <button v-if="activeLibraryTab === 'phrasebook'" class="btn btn-primary" @click="openAddModal">立即添加</button>
+          <button v-else class="btn btn-primary" @click="openKnowledgeDocModal()">立即添加</button>
         </div>
       </div>
 
@@ -187,10 +297,140 @@
     <input
       ref="fileInputRef"
       type="file"
-      accept=".json,.csv,.txt"
+      accept=".json,.csv,.txt,.md,.markdown,.srt,.vtt,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*,video/*,audio/*"
+      multiple
       class="hidden-input"
       @change="handleFileImport"
     />
+
+    <div v-if="showPhraseDraftModal" class="modal-overlay" @click="showPhraseDraftModal = false">
+      <div class="modal-shell modal-wide surface-panel" @click.stop>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">Generate Phrasebook</p>
+            <h3 class="modal-title">从知识库生成话术草稿</h3>
+          </div>
+          <button class="icon-action" @click="showPhraseDraftModal = false" title="关闭">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+              <path d="m5 5 10 10" />
+              <path d="M15 5 5 15" />
+            </svg>
+          </button>
+        </div>
+
+        <div v-if="isGeneratingPhraseDrafts" class="import-empty-card">
+          <p class="empty-title small">正在从资料中提炼标准回答...</p>
+          <p class="empty-text compact">生成后请先审核，再确认加入话术本。</p>
+        </div>
+
+        <div v-else-if="phraseDrafts.length" class="import-preview">
+          <div class="preview-head">
+            <div>
+              <span class="preview-count">生成了 {{ phraseDrafts.length }} 条话术草稿</span>
+              <p class="preview-tip">话术本代表统一口径，建议确认内容准确后再加入。</p>
+            </div>
+            <label class="check-line">
+              <input type="checkbox" :checked="allPhraseDraftsSelected" @change="toggleAllPhraseDrafts" />
+              <span>全选</span>
+            </label>
+          </div>
+
+          <div class="preview-list">
+            <label v-for="(item, index) in phraseDrafts" :key="index" class="preview-item draft-item">
+              <input v-model="item.selected" type="checkbox" />
+              <div class="draft-content">
+                <span class="knowledge-category">{{ item.category }}</span>
+                <strong class="preview-keyword">{{ item.keyword }}</strong>
+                <p class="preview-content">{{ item.content }}</p>
+                <p v-if="item.sourceTitle" class="preview-more">依据：{{ item.sourceTitle }}</p>
+              </div>
+            </label>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showPhraseDraftModal = false">取消</button>
+            <button class="btn btn-primary" :disabled="!selectedPhraseDrafts.length" @click="confirmPhraseDrafts">
+              加入话术本
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="import-empty-card">
+          <p class="empty-title small">没有生成可用草稿</p>
+          <p class="empty-text compact">可以补充更明确的产品资料、政策规则或客户常问内容后再试。</p>
+          <div class="modal-footer left">
+            <button class="btn btn-secondary" @click="showPhraseDraftModal = false">关闭</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showKnowledgeDocModal" class="modal-overlay" @click="showKnowledgeDocModal = false">
+      <div class="modal-shell surface-panel" @click.stop>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">Knowledge Source</p>
+            <h3 class="modal-title">{{ editingKnowledgeDocId ? '编辑知识资料' : '新建知识资料' }}</h3>
+          </div>
+          <button class="icon-action" @click="showKnowledgeDocModal = false" title="关闭">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+              <path d="m5 5 10 10" />
+              <path d="M15 5 5 15" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">标题</label>
+            <input v-model="knowledgeDocForm.title" class="form-input" placeholder="例如：价格政策说明" type="text" />
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">场景</label>
+              <select v-model="knowledgeDocForm.scene" class="form-select">
+                <option v-for="scene in knowledgeScenes" :key="scene" :value="scene">{{ scene }}</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">类型</label>
+              <select v-model="knowledgeDocForm.type" class="form-select">
+                <option v-for="type in knowledgeTypes" :key="type" :value="type">{{ type }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">标签</label>
+            <input v-model="knowledgeDocTagsInput" class="form-input" placeholder="用逗号分隔，例如：价格,优惠,退款" type="text" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">来源</label>
+            <input v-model="knowledgeDocForm.source" class="form-input" placeholder="例如：销售手册 / 恋爱笔记 / 公司政策" type="text" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">资料内容</label>
+            <textarea v-model="knowledgeDocForm.content" class="form-textarea" placeholder="输入事实资料、规则依据、禁忌事项或背景笔记" rows="7"></textarea>
+          </div>
+
+          <label class="check-line">
+            <input v-model="knowledgeDocForm.enabled" type="checkbox" />
+            <span>启用为回复和军师的参考资料</span>
+          </label>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="showKnowledgeDocModal = false">取消</button>
+          <button class="btn btn-primary" :disabled="!isKnowledgeDocFormValid" @click="saveKnowledgeDocument">
+            保存资料
+          </button>
+        </div>
+      </div>
+    </div>
 
     <div v-if="showAddModal" class="modal-overlay" @click="showAddModal = false">
       <div class="modal-shell surface-panel" @click.stop>
@@ -278,7 +518,7 @@
         <div class="modal-header">
           <div>
             <p class="section-kicker">Import Assets</p>
-            <h3 class="modal-title">导入话术资产</h3>
+            <h3 class="modal-title">{{ activeLibraryTab === 'phrasebook' ? '导入话术资产' : '导入知识资料' }}</h3>
           </div>
           <button class="icon-action" @click="showImportModal = false" title="关闭">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
@@ -288,12 +528,14 @@
           </button>
         </div>
 
-        <div v-if="importPreview.length === 0" class="import-empty">
+        <div v-if="importPreview.length === 0 && knowledgeDocImportPreview.length === 0" class="import-empty">
           <div class="import-empty-card">
-            <p class="empty-title small">选择 JSON 或 CSV 文件导入现有话术。</p>
-            <p class="empty-text compact">如果你还没有模板，可以先下载 CSV 示例再整理内容。</p>
+            <p class="empty-title small">{{ activeLibraryTab === 'phrasebook' ? '选择 JSON 或 CSV 文件导入现有话术。' : '上传文档、Markdown、图片或音视频素材导入知识资料。' }}</p>
+            <p class="empty-text compact">{{ activeLibraryTab === 'phrasebook' ? '如果你还没有模板，可以先下载 CSV 示例再整理内容。' : '支持常见办公文件与 Markdown；图片会自动 OCR，音视频会生成待整理摘要条目。' }}</p>
             <div class="modal-footer left">
-              <button class="btn btn-secondary" @click="downloadTemplate">下载 CSV 模板</button>
+              <button class="btn btn-secondary" @click="activeLibraryTab === 'phrasebook' ? downloadTemplate() : downloadKnowledgeTemplate()">
+                下载模板
+              </button>
               <button class="btn btn-primary" @click="triggerFileImport">选择文件</button>
             </div>
           </div>
@@ -301,7 +543,7 @@
           <div class="format-grid">
             <div class="format-card">
               <span class="format-title">JSON 示例</span>
-              <pre class="import-format">{
+              <pre v-if="activeLibraryTab === 'phrasebook'" class="import-format">{
   "items": [
     {
       "category": "工作",
@@ -310,8 +552,19 @@
     }
   ]
 }</pre>
+              <pre v-else class="import-format">{
+  "items": [
+    {
+      "title": "价格政策",
+      "scene": "销售",
+      "type": "价格政策",
+      "tags": ["价格", "优惠"],
+      "content": "年付按正式政策执行，不能承诺额外折扣。"
+    }
+  ]
+}</pre>
             </div>
-            <div class="format-card">
+            <div v-if="activeLibraryTab === 'phrasebook'" class="format-card">
               <span class="format-title">CSV 示例</span>
               <pre class="import-format">category,keyword,content
 工作,加班回复,今天晚上有点事，可能需要加一会儿班
@@ -323,25 +576,35 @@
         <div v-else class="import-preview">
           <div class="preview-head">
             <div>
-              <span class="preview-count">检测到 {{ importPreview.length }} 条可导入话术</span>
-              <p class="preview-tip">导入前会保留分类信息，并按你的策略处理重复关键词。</p>
+              <span class="preview-count">检测到 {{ activeLibraryTab === 'phrasebook' ? importPreview.length : knowledgeDocImportPreview.length }} 条可导入{{ activeLibraryTab === 'phrasebook' ? '话术' : '资料' }}</span>
+              <p class="preview-tip">{{ activeLibraryTab === 'phrasebook' ? '导入前会保留分类信息，并按你的策略处理重复关键词。' : '导入后会默认启用，可在知识库中停用或编辑。' }}</p>
             </div>
-            <label class="check-line">
+            <label v-if="activeLibraryTab === 'phrasebook'" class="check-line">
               <input v-model="skipDuplicates" type="checkbox" />
               <span>跳过重复关键词</span>
             </label>
           </div>
 
-          <div class="preview-list">
+          <div v-if="activeLibraryTab === 'phrasebook'" class="preview-list">
             <div v-for="(item, index) in importPreview.slice(0, 8)" :key="index" class="preview-item">
               <span class="knowledge-category">{{ item.category }}</span>
               <strong class="preview-keyword">{{ item.keyword }}</strong>
               <p class="preview-content">{{ item.content }}</p>
             </div>
           </div>
+          <div v-else class="preview-list">
+            <div v-for="(item, index) in knowledgeDocImportPreview.slice(0, 8)" :key="index" class="preview-item">
+              <span class="knowledge-category">{{ item.scene }} / {{ item.type }}</span>
+              <strong class="preview-keyword">{{ item.title }}</strong>
+              <p class="preview-content">{{ item.content }}</p>
+            </div>
+          </div>
 
-          <p v-if="importPreview.length > 8" class="preview-more">
-            还有 {{ importPreview.length - 8 }} 条内容将在确认后一并导入。
+          <p v-if="activeLibraryTab === 'phrasebook' && importPreview.length > 8" class="preview-more">
+            还有 {{ importPreview.length - 8 }} 条话术将在确认后一并导入。
+          </p>
+          <p v-if="activeLibraryTab === 'knowledge' && knowledgeDocImportPreview.length > 8" class="preview-more">
+            还有 {{ knowledgeDocImportPreview.length - 8 }} 条资料将在确认后一并导入。
           </p>
 
           <div class="modal-footer">
@@ -362,11 +625,16 @@ defineOptions({ name: 'Knowledge' })
 
 import {
   addKnowledge as addKnowledgeDB,
+  addKnowledgeDocument,
   bulkAddKnowledge,
+  bulkAddKnowledgeDocuments,
   deleteKnowledge as deleteKnowledgeDB,
+  deleteKnowledgeDocument,
   getKnowledgeBase,
+  getKnowledgeDocuments,
   initDatabase,
-  searchKnowledge as searchKnowledgeDB
+  searchKnowledge as searchKnowledgeDB,
+  updateKnowledgeDocument
 } from '../utils/storage'
 import { useToast } from '../composables/useToast'
 
@@ -378,18 +646,42 @@ interface KnowledgeItem {
   createdAt: number
 }
 
+interface KnowledgeDocument {
+  id?: number
+  title: string
+  content: string
+  scene: string
+  type: string
+  tags: string[]
+  source?: string
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
 const toast = useToast()
 const searchKeyword = ref('')
 const selectedCategory = ref('全部')
+const activeLibraryTab = ref<'phrasebook' | 'knowledge'>('phrasebook')
 const showAddModal = ref(false)
 const showDeleteModal = ref(false)
 const showImportModal = ref(false)
+const showKnowledgeDocModal = ref(false)
+const showPhraseDraftModal = ref(false)
 const deletingId = ref<number | null>(null)
+const editingKnowledgeDocId = ref<number | null>(null)
 const knowledge = ref<KnowledgeItem[]>([])
 const isLoading = ref(true)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const importPreview = ref<Array<{ category: string; keyword: string; content: string }>>([])
+const knowledgeDocImportPreview = ref<Array<Omit<KnowledgeDocument, 'id' | 'createdAt' | 'updatedAt'>>>([])
 const skipDuplicates = ref(true)
+const knowledgeDocuments = ref<KnowledgeDocument[]>([])
+const knowledgeDocTagsInput = ref('')
+const isGeneratingPhraseDrafts = ref(false)
+const refiningDocId = ref<number | null>(null)
+const isBatchRefiningDocs = ref(false)
+const phraseDrafts = ref<Array<{ category: string; keyword: string; content: string; sourceTitle?: string; selected: boolean }>>([])
 
 const newKnowledge = ref({
   keyword: '',
@@ -398,6 +690,20 @@ const newKnowledge = ref({
 })
 
 const categories = ['全部', '工作', '情感', '商务', '日常']
+const knowledgeScenes = ['通用', '销售', '恋爱', '客服', '职场']
+const knowledgeTypes = ['产品资料', '价格政策', '售后规则', '禁止承诺', '异议处理', '关系笔记', '沟通策略', '客户背景']
+
+const emptyKnowledgeDocForm = () => ({
+  title: '',
+  content: '',
+  scene: '通用',
+  type: '产品资料',
+  tags: [] as string[],
+  source: '',
+  enabled: true
+})
+
+const knowledgeDocForm = ref(emptyKnowledgeDocForm())
 
 const filteredKnowledge = computed(() => {
   let result = knowledge.value
@@ -417,7 +723,39 @@ const filteredKnowledge = computed(() => {
   return result
 })
 
-const totalKnowledgeCount = computed(() => knowledge.value.length)
+const filteredKnowledgeDocuments = computed(() => {
+  if (!searchKeyword.value.trim()) return knowledgeDocuments.value
+
+  const keyword = searchKeyword.value.toLowerCase()
+  return knowledgeDocuments.value.filter(item =>
+    item.title.toLowerCase().includes(keyword) ||
+    item.content.toLowerCase().includes(keyword) ||
+    item.scene.toLowerCase().includes(keyword) ||
+    item.type.toLowerCase().includes(keyword) ||
+    item.tags.some(tag => tag.toLowerCase().includes(keyword))
+  )
+})
+
+const enabledKnowledgeDocuments = computed(() => knowledgeDocuments.value.filter(item => item.enabled))
+const pendingKnowledgeDocuments = computed(() =>
+  knowledgeDocuments.value.filter(item => {
+    const tags = Array.isArray(item.tags) ? item.tags : []
+    return tags.includes('待整理') || item.content.includes('摘要待整理')
+  })
+)
+const selectedPhraseDrafts = computed(() => phraseDrafts.value.filter(item => item.selected))
+const allPhraseDraftsSelected = computed(() => phraseDrafts.value.length > 0 && phraseDrafts.value.every(item => item.selected))
+
+const totalAssetCount = computed(() =>
+  activeLibraryTab.value === 'phrasebook' ? knowledge.value.length : knowledgeDocuments.value.length
+)
+const filteredAssetCount = computed(() =>
+  activeLibraryTab.value === 'phrasebook' ? filteredKnowledge.value.length : filteredKnowledgeDocuments.value.length
+)
+const activePanelMeta = computed(() => {
+  if (activeLibraryTab.value === 'knowledge') return '资料依据'
+  return selectedCategory.value === '全部' ? '全量视图' : `${selectedCategory.value} 分类`
+})
 
 const categoryStats = computed(() =>
   categories
@@ -430,6 +768,10 @@ const categoryStats = computed(() =>
 
 const isFormValid = computed(() => {
   return newKnowledge.value.keyword.trim() && newKnowledge.value.content.trim()
+})
+
+const isKnowledgeDocFormValid = computed(() => {
+  return knowledgeDocForm.value.title.trim() && knowledgeDocForm.value.content.trim()
 })
 
 const getCategoryCount = (category: string) => {
@@ -453,6 +795,7 @@ onMounted(async () => {
     await initDatabase()
     const data = await getKnowledgeBase()
     knowledge.value = data
+    knowledgeDocuments.value = await getKnowledgeDocuments()
     console.log('[Knowledge] ✅ 话术库加载完成，共', data.length, '条')
   } catch (error) {
     console.error('[Knowledge] ❌ 话术库加载失败:', error)
@@ -463,6 +806,8 @@ onMounted(async () => {
 })
 
 const searchKnowledge = async () => {
+  if (activeLibraryTab.value === 'knowledge') return
+
   if (!searchKeyword.value.trim()) {
     const data = await getKnowledgeBase()
     knowledge.value = data
@@ -490,9 +835,242 @@ const copyKnowledge = async (content: string) => {
   toast.success('已复制到剪贴板')
 }
 
+const refreshKnowledgeDocuments = async () => {
+  knowledgeDocuments.value = await getKnowledgeDocuments()
+}
+
 const openAddModal = () => {
   newKnowledge.value = { keyword: '', category: '工作', content: '' }
   showAddModal.value = true
+}
+
+const openKnowledgeDocModal = (item?: KnowledgeDocument) => {
+  if (item) {
+    editingKnowledgeDocId.value = item.id || null
+    knowledgeDocForm.value = {
+      title: item.title,
+      content: item.content,
+      scene: item.scene,
+      type: item.type,
+      tags: [...(item.tags || [])],
+      source: item.source || '',
+      enabled: item.enabled
+    }
+    knowledgeDocTagsInput.value = (item.tags || []).join(', ')
+  } else {
+    editingKnowledgeDocId.value = null
+    knowledgeDocForm.value = emptyKnowledgeDocForm()
+    knowledgeDocTagsInput.value = ''
+  }
+  showKnowledgeDocModal.value = true
+}
+
+const parseTagsInput = (value: string) => {
+  return Array.from(new Set(
+    value
+      .split(/[,，、\n]/)
+      .map(tag => tag.trim())
+      .filter(Boolean)
+  ))
+}
+
+const saveKnowledgeDocument = async () => {
+  if (!isKnowledgeDocFormValid.value) return
+
+  const payload = {
+    ...knowledgeDocForm.value,
+    title: knowledgeDocForm.value.title.trim(),
+    content: knowledgeDocForm.value.content.trim(),
+    source: knowledgeDocForm.value.source?.trim(),
+    tags: parseTagsInput(knowledgeDocTagsInput.value)
+  }
+
+  try {
+    if (editingKnowledgeDocId.value) {
+      await updateKnowledgeDocument(editingKnowledgeDocId.value, payload)
+      toast.success('知识资料已更新')
+    } else {
+      await addKnowledgeDocument(payload)
+      toast.success('知识资料已添加')
+    }
+    await refreshKnowledgeDocuments()
+    showKnowledgeDocModal.value = false
+  } catch (error) {
+    console.error('[Knowledge] ❌ 保存知识资料失败:', error)
+    toast.error('保存失败，请重试')
+  }
+}
+
+const toggleKnowledgeDocument = async (item: KnowledgeDocument) => {
+  if (!item.id) return
+  try {
+    await updateKnowledgeDocument(item.id, { enabled: !item.enabled })
+    await refreshKnowledgeDocuments()
+    toast.success(item.enabled ? '已停用这条资料' : '已启用这条资料')
+  } catch (error) {
+    console.error('[Knowledge] ❌ 切换知识资料状态失败:', error)
+    toast.error('操作失败，请重试')
+  }
+}
+
+const deleteKnowledgeDocumentItem = async (item: KnowledgeDocument) => {
+  if (!item.id) return
+  if (!window.confirm(`确定删除知识资料「${item.title}」吗？删除后不可恢复。`)) return
+
+  try {
+    await deleteKnowledgeDocument(item.id)
+    await refreshKnowledgeDocuments()
+    toast.success('知识资料已删除')
+  } catch (error) {
+    console.error('[Knowledge] ❌ 删除知识资料失败:', error)
+    toast.error('删除失败，请重试')
+  }
+}
+
+const refineKnowledgeDocumentItem = async (item: KnowledgeDocument) => {
+  if (!item.id || refiningDocId.value === item.id) return
+
+  refiningDocId.value = item.id
+  try {
+    const result = await window.electronAPI?.ai?.refineKnowledgeDocument?.(item)
+    if (!result?.success) {
+      toast.error(result?.error || 'AI 整理失败')
+      return
+    }
+
+    const nextTags = Array.isArray(result.tags)
+      ? result.tags.filter(Boolean).filter(tag => tag !== '待整理')
+      : (item.tags || []).filter(tag => tag !== '待整理')
+    const contentWithSummary = result.summary
+      ? `${result.summary}\n\n${result.content || item.content}`.trim()
+      : (result.content || item.content)
+
+    await updateKnowledgeDocument(item.id, {
+      title: result.title || item.title,
+      type: result.type || item.type,
+      tags: nextTags,
+      content: contentWithSummary
+    })
+    await refreshKnowledgeDocuments()
+    toast.success('已完成 AI 整理')
+  } catch (error) {
+    console.error('[Knowledge] ❌ AI 整理知识资料失败:', error)
+    toast.error('整理失败，请检查模型配置')
+  } finally {
+    refiningDocId.value = null
+  }
+}
+
+const batchRefineKnowledgeDocuments = async () => {
+  if (isBatchRefiningDocs.value) return
+  const pendingDocs = pendingKnowledgeDocuments.value.slice(0, 20)
+  if (!pendingDocs.length) {
+    toast.info('当前没有待整理资料')
+    return
+  }
+
+  isBatchRefiningDocs.value = true
+  let successCount = 0
+  try {
+    for (const item of pendingDocs) {
+      if (!item.id) continue
+      refiningDocId.value = item.id
+      const result = await window.electronAPI?.ai?.refineKnowledgeDocument?.(item)
+      if (!result?.success) continue
+
+      const nextTags = Array.isArray(result.tags)
+        ? result.tags.filter(Boolean).filter(tag => tag !== '待整理').slice(0, 8)
+        : (item.tags || []).filter(tag => tag !== '待整理')
+      const contentWithSummary = result.summary
+        ? `${result.summary}\n\n${result.content || item.content}`.trim()
+        : (result.content || item.content)
+
+      await updateKnowledgeDocument(item.id, {
+        title: result.title || item.title,
+        type: result.type || item.type,
+        tags: nextTags,
+        content: contentWithSummary
+      })
+      successCount += 1
+    }
+
+    await refreshKnowledgeDocuments()
+    if (successCount > 0) {
+      toast.success(`已批量整理 ${successCount} 条资料`)
+    } else {
+      toast.warning('没有可整理成功的资料，请检查模型配置')
+    }
+  } catch (error) {
+    console.error('[Knowledge] ❌ 批量整理知识资料失败:', error)
+    toast.error('批量整理失败，请稍后重试')
+  } finally {
+    refiningDocId.value = null
+    isBatchRefiningDocs.value = false
+  }
+}
+
+const normalizePhraseDraftCategory = (category: string) => {
+  return categories.includes(category) && category !== '全部' ? category : '商务'
+}
+
+const generatePhraseDraftsFromKnowledge = async (documents?: KnowledgeDocument[]) => {
+  const docs = (documents?.length ? documents : enabledKnowledgeDocuments.value).slice(0, 8)
+  if (!docs.length) {
+    toast.warning('没有可用于提炼的话术资料')
+    return
+  }
+
+  showPhraseDraftModal.value = true
+  isGeneratingPhraseDrafts.value = true
+  phraseDrafts.value = []
+
+  try {
+    const result = await window.electronAPI?.ai?.generatePhrasebookDrafts?.(docs)
+    phraseDrafts.value = (result || [])
+      .filter(item => item.keyword?.trim() && item.content?.trim())
+      .map(item => ({
+        category: normalizePhraseDraftCategory(item.category || '商务'),
+        keyword: item.keyword.trim(),
+        content: item.content.trim(),
+        sourceTitle: item.sourceTitle,
+        selected: true
+      }))
+
+    if (!phraseDrafts.value.length) {
+      toast.warning('没有生成可用话术草稿')
+    }
+  } catch (error) {
+    console.error('[Knowledge] ❌ 生成话术草稿失败:', error)
+    toast.error('生成失败，请检查模型配置')
+  } finally {
+    isGeneratingPhraseDrafts.value = false
+  }
+}
+
+const toggleAllPhraseDrafts = () => {
+  const next = !allPhraseDraftsSelected.value
+  phraseDrafts.value.forEach(item => {
+    item.selected = next
+  })
+}
+
+const confirmPhraseDrafts = async () => {
+  if (!selectedPhraseDrafts.value.length) return
+
+  try {
+    await bulkAddKnowledge(selectedPhraseDrafts.value.map(item => ({
+      category: item.category,
+      keyword: item.keyword,
+      content: item.content
+    })))
+    knowledge.value = await getKnowledgeBase()
+    activeLibraryTab.value = 'phrasebook'
+    showPhraseDraftModal.value = false
+    toast.success(`已加入 ${selectedPhraseDrafts.value.length} 条话术`)
+  } catch (error) {
+    console.error('[Knowledge] ❌ 加入话术本失败:', error)
+    toast.error('加入失败，请重试')
+  }
 }
 
 const handleAddKnowledge = async () => {
@@ -536,6 +1114,7 @@ const confirmDelete = async () => {
 const triggerFileImport = () => {
   showImportModal.value = true
   importPreview.value = []
+  knowledgeDocImportPreview.value = []
   if (fileInputRef.value) {
     fileInputRef.value.click()
   }
@@ -595,15 +1174,190 @@ const downloadTemplate = () => {
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
+  URL.revokeObjectURL(url)
   toast.success('模板已下载')
+}
+
+const downloadKnowledgeTemplate = () => {
+  const jsonContent = JSON.stringify({
+    items: [
+      {
+        title: '价格政策说明',
+        scene: '销售',
+        type: '价格政策',
+        tags: ['价格', '优惠', '退款'],
+        source: '销售手册',
+        enabled: true,
+        content: '年付优惠、赠品和退款规则必须以公司正式政策为准，不能口头承诺额外折扣。'
+      }
+    ]
+  }, null, 2)
+
+  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', '知识库导入模板.json')
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  toast.success('模板已下载')
+}
+
+const normalizeKnowledgeDocImport = (items: any[]): Array<Omit<KnowledgeDocument, 'id' | 'createdAt' | 'updatedAt'>> => {
+  return items
+    .filter(item => item && typeof item === 'object' && typeof item.title === 'string' && typeof item.content === 'string')
+    .map(item => ({
+      title: item.title.trim(),
+      content: item.content.trim(),
+      scene: knowledgeScenes.includes(item.scene) ? item.scene : '通用',
+      type: knowledgeTypes.includes(item.type) ? item.type : '产品资料',
+      tags: Array.isArray(item.tags)
+        ? item.tags.map((tag: unknown) => String(tag).trim()).filter(Boolean)
+        : parseTagsInput(String(item.tags || '')),
+      source: typeof item.source === 'string' ? item.source.trim() : '',
+      enabled: typeof item.enabled === 'boolean' ? item.enabled : true
+    }))
+    .filter(item => item.title && item.content)
+}
+
+const readFileAsDataUrl = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+const getFileExtension = (fileName: string) => {
+  const index = fileName.lastIndexOf('.')
+  return index >= 0 ? fileName.slice(index + 1).toLowerCase() : ''
+}
+
+const buildPendingMediaSummary = (file: File, scene: string, type: string) => {
+  const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
+  return {
+    title: `${file.name} 摘要待整理`,
+    content: [
+      `文件名：${file.name}`,
+      `文件类型：${file.type || '未知'}`,
+      `文件大小：${sizeMB} MB`,
+      '当前版本暂不直接解析该二进制文件内容。',
+      '建议补充：',
+      '1) 核心结论',
+      '2) 关键事实或参数',
+      '3) 可直接发送的标准回答边界'
+    ].join('\n'),
+    scene,
+    type,
+    tags: ['待整理', '上传文件'],
+    source: `上传文件：${file.name}`,
+    enabled: true
+  }
+}
+
+const parseKnowledgeDocsFromJsonText = (text: string) => {
+  let data: any
+  try {
+    data = JSON.parse(text)
+  } catch {
+    return []
+  }
+  const rawItems = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : Array.isArray(data.data) ? data.data : []
+  return normalizeKnowledgeDocImport(rawItems)
+}
+
+const createKnowledgeDocFromPlainText = (fileName: string, text: string) => {
+  const titleBase = fileName.replace(/\.[^/.]+$/, '')
+  const content = text.trim().slice(0, 12000)
+  if (!content) return null
+
+  return {
+    title: titleBase || '未命名资料',
+    content,
+    scene: '通用',
+    type: '产品资料',
+    tags: ['上传文件', '文本'],
+    source: `上传文件：${fileName}`,
+    enabled: true
+  }
+}
+
+const extractKnowledgeDocsFromFile = async (file: File): Promise<Array<Omit<KnowledgeDocument, 'id' | 'createdAt' | 'updatedAt'>>> => {
+  const fileName = file.name
+  const extension = getFileExtension(fileName)
+  const mime = file.type.toLowerCase()
+
+  if (mime.startsWith('image/')) {
+    const imageData = await readFileAsDataUrl(file)
+    const result = await window.electronAPI?.ocr?.recognize?.(imageData)
+    const text = result?.success ? (result.text || '').trim() : ''
+    if (!text) {
+      return [buildPendingMediaSummary(file, '通用', '产品资料')]
+    }
+
+    return [{
+      title: `${fileName} OCR 结果`,
+      content: text.slice(0, 12000),
+      scene: '通用',
+      type: '产品资料',
+      tags: ['上传文件', '图片', 'OCR'],
+      source: `图片OCR：${fileName}`,
+      enabled: true
+    }]
+  }
+
+  if (mime.startsWith('video/')) {
+    return [buildPendingMediaSummary(file, '通用', '沟通策略')]
+  }
+
+  if (mime.startsWith('audio/')) {
+    return [buildPendingMediaSummary(file, '通用', '沟通策略')]
+  }
+
+  if (extension === 'json') {
+    const text = await file.text()
+    const docs = parseKnowledgeDocsFromJsonText(text)
+    if (docs.length > 0) return docs
+    const asTextDoc = createKnowledgeDocFromPlainText(fileName, text)
+    return asTextDoc ? [asTextDoc] : []
+  }
+
+  if (['txt', 'md', 'markdown', 'srt', 'vtt', 'csv'].includes(extension)) {
+    const text = await file.text()
+    const asTextDoc = createKnowledgeDocFromPlainText(fileName, text)
+    return asTextDoc ? [asTextDoc] : []
+  }
+
+  if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(extension)) {
+    return [buildPendingMediaSummary(file, '通用', '产品资料')]
+  }
+
+  return [buildPendingMediaSummary(file, '通用', '产品资料')]
 }
 
 const handleFileImport = async (event: Event) => {
   const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
+  const files = Array.from(target.files || [])
+  if (!files.length) return
 
   try {
+    if (activeLibraryTab.value === 'knowledge') {
+      const docsBatches = await Promise.all(files.map(uploadedFile => extractKnowledgeDocsFromFile(uploadedFile)))
+      const validDocs = docsBatches.flat().filter(item => item.title && item.content)
+      if (validDocs.length === 0) {
+        toast.error('没有找到有效的知识资料')
+        return
+      }
+
+      knowledgeDocImportPreview.value = validDocs
+      toast.success(`检测到 ${validDocs.length} 条可导入资料`)
+      return
+    }
+
+    const file = files[0]
     const text = await file.text()
     let items: Array<{ category: string; keyword: string; content: string }> = []
     const fileName = file.name.toLowerCase()
@@ -661,6 +1415,23 @@ const handleFileImport = async (event: Event) => {
 }
 
 const confirmImport = async () => {
+  if (activeLibraryTab.value === 'knowledge') {
+    if (knowledgeDocImportPreview.value.length === 0) return
+
+    try {
+      await bulkAddKnowledgeDocuments(knowledgeDocImportPreview.value)
+      await refreshKnowledgeDocuments()
+      toast.success(`成功导入 ${knowledgeDocImportPreview.value.length} 条资料`)
+    } catch (error) {
+      console.error('[Knowledge] ❌ 批量导入知识资料失败:', error)
+      toast.error('导入失败，请重试')
+    } finally {
+      showImportModal.value = false
+      knowledgeDocImportPreview.value = []
+    }
+    return
+  }
+
   if (importPreview.value.length === 0) return
 
   try {
@@ -857,6 +1628,43 @@ const exportKnowledge = () => {
   height: 16px;
 }
 
+.asset-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(72, 57, 41, 0.08);
+}
+
+.asset-tab {
+  min-height: 36px;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  font-weight: 700;
+  transition: all var(--transition);
+}
+
+.asset-tab.active {
+  color: var(--text-inverse);
+  background: var(--primary-gradient);
+  box-shadow: 0 12px 24px rgba(15, 118, 110, 0.16);
+}
+
+.library-note-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--primary-dark);
+  font-size: var(--font-xs);
+  font-weight: 800;
+}
+
 .search-row {
   display: flex;
   align-items: center;
@@ -1002,6 +1810,10 @@ const exportKnowledge = () => {
   box-shadow: var(--shadow-md);
 }
 
+.document-card {
+  border-color: rgba(37, 99, 235, 0.12);
+}
+
 .keyword-wrap {
   display: flex;
   flex-direction: column;
@@ -1020,6 +1832,11 @@ const exportKnowledge = () => {
   color: var(--primary-dark);
   font-size: var(--font-xs);
   font-weight: 700;
+}
+
+.knowledge-category.disabled {
+  background: rgba(72, 57, 41, 0.08);
+  color: var(--text-tertiary);
 }
 
 .knowledge-keyword {
@@ -1074,6 +1891,11 @@ const exportKnowledge = () => {
   border-color: var(--border-strong);
 }
 
+.card-copy-btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
 .card-copy-btn svg {
   width: 14px !important;
   height: 14px !important;
@@ -1081,6 +1903,14 @@ const exportKnowledge = () => {
   max-height: 14px;
   flex-shrink: 0;
   display: block;
+}
+
+.foot-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .icon-action {
@@ -1094,6 +1924,13 @@ const exportKnowledge = () => {
   border: 1px solid rgba(72, 57, 41, 0.1);
   color: var(--text-tertiary);
   transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.card-action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -1235,6 +2072,12 @@ const exportKnowledge = () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
 }
 
 .form-label {
@@ -1438,9 +2281,11 @@ const exportKnowledge = () => {
 
   .search-row,
   .control-head,
-  .preview-head {
+  .preview-head,
+  .form-grid {
     flex-direction: column;
     align-items: stretch;
+    display: flex;
   }
 
   .knowledge-card-foot {

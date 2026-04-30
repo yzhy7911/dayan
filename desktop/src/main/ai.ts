@@ -14,6 +14,8 @@ interface PromptTemplate {
   user: string
 }
 
+type ResponseMode = 'fast' | 'balanced' | 'deep'
+
 const NATURAL_REPLY_RULES = `你在替用户写微信里的下一句回复，不是写建议。
 【先读上下文】
 - 如果有多轮记录，重点看最后一条“对方”说了什么
@@ -321,6 +323,11 @@ class AIEngine {
   private retryCount = 2
   private retryDelay = 1000
 
+  private isPolishLikeOutput(text: string): boolean {
+    const normalized = text.replace(/\s+/g, '').toLowerCase()
+    return /润色|改写|优化|版本\d|版本一|版本二|建议回复|可以回复|回复示例|参考回复|如下/.test(normalized)
+  }
+
   init() {
     this.setupIpcHandlers()
     logger.info('AI', '引擎初始化完成')
@@ -338,16 +345,30 @@ class AIEngine {
       ipcMain.handle(channel, handler)
     }
 
-    safeHandle('ai:generateReply', (_event: IpcMainInvokeEvent, context: string, style: string, imageData?: string) => {
-      return this.generateReply(context, style, imageData)
+    safeHandle('ai:generateReply', (_event: IpcMainInvokeEvent, context: string, style: string, modeOrImage?: ResponseMode | string, imageData?: string) => {
+      const mode: ResponseMode = modeOrImage === 'fast' || modeOrImage === 'balanced' || modeOrImage === 'deep'
+        ? modeOrImage
+        : 'balanced'
+      const image = typeof modeOrImage === 'string' && modeOrImage.startsWith('data:')
+        ? modeOrImage
+        : imageData
+      return this.generateReply(context, style, mode, image)
     })
 
     safeHandle('ai:polishText', (_event: IpcMainInvokeEvent, text: string, style: string) => {
       return this.polishText(text, style)
     })
 
-    safeHandle('ai:analyzeIntent', (_event: IpcMainInvokeEvent, chatHistory: any[], goal?: string) => {
-      return this.analyzeIntent(chatHistory, goal)
+    safeHandle('ai:generatePhrasebookDrafts', (_event: IpcMainInvokeEvent, documents: any[]) => {
+      return this.generatePhrasebookDrafts(documents)
+    })
+
+    safeHandle('ai:refineKnowledgeDocument', (_event: IpcMainInvokeEvent, document: any) => {
+      return this.refineKnowledgeDocument(document)
+    })
+
+    safeHandle('ai:analyzeIntent', (_event: IpcMainInvokeEvent, chatHistory: any[], goal?: string, mode: ResponseMode = 'balanced') => {
+      return this.analyzeIntent(chatHistory, goal, mode)
     })
 
     safeHandle('ai:setConfig', (_event: IpcMainInvokeEvent, config: ModelConfig) => {
@@ -400,27 +421,79 @@ class AIEngine {
     }
   }
 
-  async generateReply(context: string, style: string = 'friendly', imageData?: string): Promise<{ style: string; reply: string }[]> {
+  async generateReply(
+    context: string,
+    style: string = 'friendly',
+    mode: ResponseMode = 'balanced',
+    imageData?: string
+  ): Promise<{ style: string; reply: string }[]> {
     // 如果 style 是 'all'，生成所有风格的回复
     if (style === 'all') {
-      return await this.generateAllStyleReplies(context, imageData)
+      return await this.generateAllStyleReplies(context, mode, imageData)
     }
 
     // 否则生成单一风格的回复
     const template = STYLE_PROMPTS[style] || STYLE_PROMPTS.friendly
 
     try {
+      const baseUserContent = this.buildUserContent(context, template.user, imageData)
+      const multiReplyInstruction = `
+
+请一次给出3条不同表述的候选回复，要求：
+- 本任务是“代写下一句回复”，不是润色或改写原句
+- 不要输出“润色版/版本1/版本2/优化建议/可改成”
+- 不要复述用户原话，不要解释思路
+- 每条都可直接发送
+- 语气一致但措辞有差异
+- 不要解释，不要标题
+- 每条单独一行`
+      const singleStylePrompt = typeof baseUserContent === 'string'
+        ? `${baseUserContent}${multiReplyInstruction}`
+        : baseUserContent
+
       const messages = [
         { role: 'system', content: template.system },
-        { role: 'user', content: this.buildUserContent(context, template.user, imageData) }
+        { role: 'user', content: singleStylePrompt }
       ]
 
-      const result = await this.callLLMWithRetry(messages)
-      const reply = this.cleanGeneratedReply(this.extractFirstReply(result))
+      const result = await this.callLLMWithRetry(messages, undefined, mode)
+      let parsedReplies = this.extractReplies(result)
+        .map(item => this.cleanGeneratedReply(item))
+        .filter(Boolean)
+        .slice(0, 3)
+
+      // 兜底：如果检测到“润色/版本说明”倾向，自动再生成一次更严格结果
+      if (this.isPolishLikeOutput(result) || parsedReplies.some(item => this.isPolishLikeOutput(item))) {
+        const strictMessages = [
+          { role: 'system', content: `${template.system}\n\n【最终硬规则】你是代写聊天下一句，不是润色器。严禁输出“润色/版本/建议/说明”。` },
+          { role: 'user', content: `${singleStylePrompt}\n\n再次强调：只输出可直接发送的3条回复，每条一行。` }
+        ]
+        const retryResult = await this.callLLMWithRetry(strictMessages, 1, mode)
+        parsedReplies = this.extractReplies(retryResult)
+          .map(item => this.cleanGeneratedReply(item))
+          .filter(Boolean)
+          .filter(item => !this.isPolishLikeOutput(item))
+          .slice(0, 3)
+      }
+
+      if (parsedReplies.length > 0) {
+        return parsedReplies.map(reply => ({
+          style: style,
+          reply
+        }))
+      }
+
+      const fallbackReply = this.cleanGeneratedReply(this.extractFirstReply(result)) || result
+      if (this.isPolishLikeOutput(fallbackReply)) {
+        return [{
+          style: style,
+          reply: '我再换个更自然的说法，你稍等一下。'
+        }]
+      }
 
       return [{
         style: style,
-        reply: reply || result
+        reply: fallbackReply
       }]
     } catch (e: any) {
       logger.error('[AI] 生成回复失败:', e)
@@ -455,7 +528,11 @@ class AIEngine {
   }
 
   // 生成所有风格的回复
-  private async generateAllStyleReplies(context: string, imageData?: string): Promise<{ style: string; reply: string }[]> {
+  private async generateAllStyleReplies(
+    context: string,
+    mode: ResponseMode = 'balanced',
+    imageData?: string
+  ): Promise<{ style: string; reply: string }[]> {
     const styles = ['friendly', 'formal', 'humorous', 'concise', 'empathetic']
     const results: { style: string; reply: string }[] = []
 
@@ -495,7 +572,7 @@ class AIEngine {
         { role: 'user', content: userContent }
       ]
 
-      const result = await this.callLLM(messages)
+      const result = await this.callLLM(messages, mode)
       logger.info('AI', '收到原始回复:', result.substring(0, 200))
 
       // 尝试解析 JSON
@@ -509,7 +586,10 @@ class AIEngine {
 
           for (const [style, reply] of Object.entries(parsed)) {
             if (styles.includes(style) && reply && typeof reply === 'string') {
-              results.push({ style, reply: this.cleanGeneratedReply(reply) })
+              const cleaned = this.cleanGeneratedReply(reply)
+              if (!this.isPolishLikeOutput(cleaned)) {
+                results.push({ style, reply: cleaned })
+              }
             }
           }
 
@@ -556,7 +636,129 @@ class AIEngine {
     }
   }
 
-  async analyzeIntent(chatHistory: any[], goal?: string): Promise<any> {
+  async generatePhrasebookDrafts(documents: any[]): Promise<Array<{ category: string; keyword: string; content: string; sourceTitle?: string }>> {
+    try {
+      const sourceText = documents
+        .map((doc, index) => [
+          `资料${index + 1}：${doc.title || '未命名资料'}`,
+          `场景：${doc.scene || '通用'}`,
+          `类型：${doc.type || '资料'}`,
+          `内容：${doc.content || ''}`
+        ].join('\n'))
+        .join('\n\n')
+
+      const messages = [
+        {
+          role: 'system',
+          content: `你是销售/客服/关系沟通的标准话术整理师。你的任务是把知识库资料提炼成“可以直接发给对方”的标准回答。
+
+要求：
+- 只基于资料内容提炼，不要编造资料里没有的价格、优惠、承诺、政策或关系事实
+- 每条话术回答一个明确问题
+- 回答要克制、统一、自然，适合微信或私聊直接发送
+- 遇到资料缺少依据时，回答要引导“我帮您确认最新政策/情况”，不要硬答
+- 输出 3-6 条
+
+必须只输出 JSON，不要输出解释文字：
+{
+  "items": [
+    {
+      "category": "商务",
+      "keyword": "客户常问问题",
+      "content": "可以直接发送的标准回答",
+      "sourceTitle": "依据资料标题"
+    }
+  ]
+}`
+        },
+        {
+          role: 'user',
+          content: `请从以下知识库资料中提取标准问题和标准回答草稿：\n\n${sourceText}`
+        }
+      ]
+
+      const result = await this.callLLMWithRetry(messages)
+      const jsonMatch = result.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        logger.error('AI', '生成话术草稿失败：未找到 JSON 对象')
+        return []
+      }
+
+      const parsed = JSON.parse(jsonMatch[0])
+      const items = Array.isArray(parsed.items) ? parsed.items : []
+      return items
+        .filter((item: any) => item?.keyword && item?.content)
+        .slice(0, 8)
+        .map((item: any) => ({
+          category: typeof item.category === 'string' ? item.category : '商务',
+          keyword: String(item.keyword).trim(),
+          content: String(item.content).trim(),
+          sourceTitle: typeof item.sourceTitle === 'string' ? item.sourceTitle : undefined
+        }))
+    } catch (e: any) {
+      logger.error('AI', '生成话术草稿失败:', e)
+      return []
+    }
+  }
+
+  async refineKnowledgeDocument(document: any): Promise<{
+    success: boolean
+    title?: string
+    content?: string
+    type?: string
+    tags?: string[]
+    summary?: string
+    error?: string
+  }> {
+    try {
+      const messages = [
+        {
+          role: 'system',
+          content: `你是知识库整理助手。请把原始资料整理成可检索、可引用、可用于回复和军师分析的知识条目。
+
+要求：
+- 保留关键事实，不编造资料中不存在的价格、优惠、承诺、时间、人物关系
+- 内容应简洁、结构清晰，适合后续检索
+- 生成 3-6 个标签，标签尽量短
+- type 只能在这些值中选择一个：产品资料、价格政策、售后规则、禁止承诺、异议处理、关系笔记、沟通策略、客户背景
+
+只输出 JSON：
+{
+  "title": "优化后的标题",
+  "type": "产品资料",
+  "tags": ["标签1", "标签2"],
+  "summary": "一句话摘要（30字以内）",
+  "content": "整理后的正文"
+}`
+        },
+        {
+          role: 'user',
+          content: `请整理以下资料：\n标题：${document?.title || '未命名'}\n场景：${document?.scene || '通用'}\n类型：${document?.type || '产品资料'}\n内容：${document?.content || ''}`
+        }
+      ]
+
+      const result = await this.callLLMWithRetry(messages)
+      const jsonMatch = result.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        return { success: false, error: '未解析到整理结果' }
+      }
+
+      const parsed = JSON.parse(jsonMatch[0])
+      return {
+        success: true,
+        title: typeof parsed.title === 'string' ? parsed.title.trim() : undefined,
+        content: typeof parsed.content === 'string' ? parsed.content.trim() : undefined,
+        type: typeof parsed.type === 'string' ? parsed.type.trim() : undefined,
+        tags: Array.isArray(parsed.tags) ? parsed.tags.map((tag: any) => String(tag).trim()).filter(Boolean).slice(0, 8) : [],
+        summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : undefined
+      }
+    } catch (e: any) {
+      logger.error('AI', '整理知识资料失败:', e)
+      return { success: false, error: e?.message || '整理失败' }
+    }
+  }
+
+  async analyzeIntent(chatHistory: any[], goal?: string, mode: ResponseMode = 'balanced'): Promise<any> {
     try {
       const historyText = chatHistory
         .map((m: any) => `${m.role === 'user' ? '对方' : '我'}：${m.content}`)
@@ -570,7 +772,7 @@ class AIEngine {
 
       logger.info('AI', '开始军师分析', { messageCount: chatHistory.length, hasGoal: !!goal })
 
-      const result = await this.callLLMWithRetry(messages)
+      const result = await this.callLLMWithRetry(messages, undefined, mode)
       logger.info('AI', '军师分析完成', { length: result.length })
 
       try {
@@ -804,15 +1006,16 @@ class AIEngine {
 
   private async callLLMWithRetry(
     messages: { role: string; content: string }[],
-    retries: number = this.retryCount
+    retries: number = this.retryCount,
+    mode: ResponseMode = 'balanced'
   ): Promise<string> {
     try {
-      return await this.callLLM(messages)
+      return await this.callLLM(messages, mode)
     } catch (e: any) {
       if (retries > 0 && this.isRetryableError(e)) {
         logger.info('AI', `请求失败，${this.retryDelay / 1000}s 后重试`, { retriesRemaining: retries })
         await this.sleep(this.retryDelay)
-        return this.callLLMWithRetry(messages, retries - 1)
+        return this.callLLMWithRetry(messages, retries - 1, mode)
       }
       throw e
     }
@@ -823,7 +1026,7 @@ class AIEngine {
     return !status || status >= 500 || status === 429 || e.code === 'ECONNABORTED' || e.code === 'ETIMEDOUT'
   }
 
-  private async callLLM(messages: { role: string; content: string }[]): Promise<string> {
+  private async callLLM(messages: { role: string; content: string }[], mode: ResponseMode = 'balanced'): Promise<string> {
     if (!this.config) {
       throw new Error('请先配置 API Key')
     }
@@ -833,22 +1036,28 @@ class AIEngine {
     }
 
     try {
+      const inferenceConfig = mode === 'fast'
+        ? { temperature: 0.7, top_p: 0.88, presence_penalty: 0.1, max_tokens: 620, timeout: 18000 }
+        : mode === 'deep'
+          ? { temperature: 0.9, top_p: 0.94, presence_penalty: 0.25, max_tokens: 1600, timeout: 40000 }
+          : { temperature: 0.86, top_p: 0.92, presence_penalty: 0.2, max_tokens: 1200, timeout: 30000 }
+
       const response = await axios.post(
         `${this.config.baseUrl}/chat/completions`,
         {
           model: this.config.model,
           messages: messages,
-          temperature: 0.86,
-          top_p: 0.92,
-          presence_penalty: 0.2,
-          max_tokens: 1200
+          temperature: inferenceConfig.temperature,
+          top_p: inferenceConfig.top_p,
+          presence_penalty: inferenceConfig.presence_penalty,
+          max_tokens: inferenceConfig.max_tokens
         },
         {
           headers: {
             'Authorization': `Bearer ${this.config.apiKey}`,
             'Content-Type': 'application/json'
           },
-          timeout: 30000
+          timeout: inferenceConfig.timeout
         }
       )
 

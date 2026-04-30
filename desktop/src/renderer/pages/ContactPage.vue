@@ -73,6 +73,12 @@
               </span>
             </div>
           </div>
+          <button
+            class="coach-quick-btn"
+            @click.stop="openCoachByContactId(contact.id)"
+          >
+            军师
+          </button>
           <div class="contact-arrow">›</div>
         </div>
 
@@ -94,6 +100,7 @@
         <button class="back-btn" @click="selectedContact = null">‹</button>
         <h3 class="detail-title">{{ selectedContact.name }}</h3>
         <div class="detail-actions">
+          <button class="action-btn coach-btn" @click="openCoachForContact">军师</button>
           <button class="action-btn edit-btn" @click="editContact">编辑</button>
           <button class="action-btn delete-btn" @click="confirmDeleteContact">删除</button>
           <button class="analyze-btn" @click="analyzeContact" :disabled="isAnalyzing">
@@ -272,10 +279,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ContactStorage, Contact, ContactAnalysis } from '../utils/contact-storage'
 import { useToast } from '../composables/useToast'
 
 const toast = useToast()
+const router = useRouter()
 
 const contacts = ref<Contact[]>([])
 const selectedContact = ref<Contact | null>(null)
@@ -335,6 +344,11 @@ async function selectContact(contact: Contact) {
   selectedContact.value = contact
   analysis.value = await ContactStorage.getLatestAnalysis(contact.id)
   chatRecords.value = await ContactStorage.getChatRecords(contact.id)
+}
+
+function openCoachByContactId(contactId?: number) {
+  if (!contactId) return
+  router.push(`/coach?contactId=${contactId}`)
 }
 
 function editContact() {
@@ -585,6 +599,11 @@ async function analyzeContact() {
   } finally {
     isAnalyzing.value = false
   }
+}
+
+function openCoachForContact() {
+  if (!selectedContact.value?.id) return
+  openCoachByContactId(selectedContact.value.id)
 }
 
 function formatTime(timestamp: number): string {
@@ -887,16 +906,24 @@ function formatTime(timestamp: number): string {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .action-btn {
-  width: 32px;
-  height: 32px;
+  flex: 0 0 auto;
+  min-width: 52px;
+  min-height: 32px;
+  padding: 0 10px;
   border-radius: 8px;
   border: none;
   cursor: pointer;
-  font-size: 16px;
-  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  word-break: keep-all;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
@@ -911,6 +938,15 @@ function formatTime(timestamp: number): string {
   background: #fde68a;
 }
 
+.coach-btn {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.coach-btn:hover {
+  background: #bbf7d0;
+}
+
 .delete-btn {
   background: #fee2e2;
   color: #dc2626;
@@ -921,14 +957,18 @@ function formatTime(timestamp: number): string {
 }
 
 .analyze-btn {
-  padding: 8px 16px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 14px;
   background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
   color: white;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   border: none;
   cursor: pointer;
+  white-space: nowrap;
+  word-break: keep-all;
 }
 
 .analyze-btn:disabled {
@@ -1428,6 +1468,11 @@ function formatTime(timestamp: number): string {
   gap: var(--space-3);
 }
 
+.detail-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .export-btn,
 .import-btn,
 .cancel-btn,
@@ -1495,6 +1540,10 @@ function formatTime(timestamp: number): string {
 }
 
 .contact-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--space-3);
   padding: var(--space-4);
   border-radius: var(--radius-xl);
   background: rgba(255, 255, 255, 0.62);
@@ -1512,6 +1561,30 @@ function formatTime(timestamp: number): string {
   border-radius: var(--radius-lg);
   background: var(--primary-gradient);
   box-shadow: 0 14px 28px rgba(15, 118, 110, 0.16);
+}
+
+.contact-info {
+  min-width: 0;
+}
+
+.coach-quick-btn {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.coach-quick-btn:hover {
+  background: rgba(15, 118, 110, 0.16);
+}
+
+.contact-arrow {
+  justify-self: end;
 }
 
 .contact-name,
@@ -1698,7 +1771,6 @@ function formatTime(timestamp: number): string {
 @media (max-width: 760px) {
   .svip-banner,
   .list-header,
-  .detail-header,
   .chat-input-actions,
   .modal-actions {
     align-items: stretch;
@@ -1709,6 +1781,49 @@ function formatTime(timestamp: number): string {
   .detail-actions {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .detail-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "back title"
+      "actions actions";
+    align-items: center;
+    gap: 10px 12px;
+  }
+
+  .back-btn {
+    grid-area: back;
+  }
+
+  .detail-title {
+    grid-area: title;
+    min-width: 0;
+  }
+
+  .detail-actions {
+    grid-area: actions;
+    justify-content: flex-start;
+  }
+
+  .detail-actions .action-btn,
+  .detail-actions .analyze-btn {
+    min-height: 32px;
+    padding: 0 10px;
+    white-space: nowrap;
+    word-break: keep-all;
+    flex: 0 0 auto;
+  }
+
+  .contact-item {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    row-gap: 8px;
+  }
+
+  .coach-quick-btn {
+    grid-column: 2 / 3;
+    justify-self: start;
   }
 }
 </style>

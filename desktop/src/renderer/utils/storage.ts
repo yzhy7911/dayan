@@ -2,6 +2,7 @@
 import {
   ChatHistoryDB,
   KnowledgeDB,
+  KnowledgeLibraryDB,
   DatabaseInitializer
 } from './database'
 
@@ -78,16 +79,25 @@ export async function initDatabase(): Promise<void> {
   await DatabaseInitializer.init()
 }
 
-export const getChatHistory = ChatHistoryDB.getAll
-export const addChatHistory = ChatHistoryDB.add
-export const clearChatHistory = ChatHistoryDB.clear
+export const getChatHistory = (limit?: number) => ChatHistoryDB.getAll(limit)
+export const addChatHistory = (chat: Parameters<typeof ChatHistoryDB.add>[0]) => ChatHistoryDB.add(chat)
+export const clearChatHistory = () => ChatHistoryDB.clear()
 
 // === 话术库管理（使用 Dexie.js）===
-export const getKnowledgeBase = KnowledgeDB.getAll
-export const addKnowledge = KnowledgeDB.add
-export const searchKnowledge = KnowledgeDB.search
-export const getKnowledgeByCategory = KnowledgeDB.getByCategory
-export const updateKnowledge = KnowledgeDB.update
-export const deleteKnowledge = KnowledgeDB.delete
-export const bulkAddKnowledge = KnowledgeDB.bulkAdd
-export const getKnowledgeCategories = KnowledgeDB.getAllCategories
+export const getKnowledgeBase = () => KnowledgeDB.getAll()
+export const addKnowledge = (item: Parameters<typeof KnowledgeDB.add>[0]) => KnowledgeDB.add(item)
+export const searchKnowledge = (keyword: string, limit?: number) => KnowledgeDB.search(keyword, limit)
+export const getKnowledgeByCategory = (category: string) => KnowledgeDB.getByCategory(category)
+export const updateKnowledge = (id: number, updates: Parameters<typeof KnowledgeDB.update>[1]) => KnowledgeDB.update(id, updates)
+export const deleteKnowledge = (id: number) => KnowledgeDB.delete(id)
+export const bulkAddKnowledge = (items: Parameters<typeof KnowledgeDB.bulkAdd>[0]) => KnowledgeDB.bulkAdd(items)
+export const getKnowledgeCategories = () => KnowledgeDB.getAllCategories()
+
+// === 知识库管理（资料依据，不等同于可直接发送的话术）===
+export const getKnowledgeDocuments = () => KnowledgeLibraryDB.getAll()
+export const getEnabledKnowledgeDocuments = () => KnowledgeLibraryDB.getEnabled()
+export const addKnowledgeDocument = (item: Parameters<typeof KnowledgeLibraryDB.add>[0]) => KnowledgeLibraryDB.add(item)
+export const searchKnowledgeDocuments = (keyword: string, limit?: number, scene?: string) => KnowledgeLibraryDB.search(keyword, limit, scene)
+export const updateKnowledgeDocument = (id: number, updates: Parameters<typeof KnowledgeLibraryDB.update>[1]) => KnowledgeLibraryDB.update(id, updates)
+export const deleteKnowledgeDocument = (id: number) => KnowledgeLibraryDB.delete(id)
+export const bulkAddKnowledgeDocuments = (items: Parameters<typeof KnowledgeLibraryDB.bulkAdd>[0]) => KnowledgeLibraryDB.bulkAdd(items)
