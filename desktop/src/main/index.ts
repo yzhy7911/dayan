@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain, globalShortcut } from 'electron'
 import { join } from 'path'
 import { windowManager } from './window'
 import { clipboardManager } from './clipboard'
-import { licenseManager } from './license'
 import { aiEngine } from './ai'
 import { logger } from './logger'
 import { errorMonitor } from './error-monitor'
@@ -190,19 +189,28 @@ safeHandle('window:getDockStatus', async () => {
   }
 })
 
+safeHandle('app:getVersion', () => {
+  return app.getVersion()
+})
+
 // === Clipboard IPC 已在 clipboard.ts 中注册 ===
 
 // === License IPC ===
-safeHandle('license:verify', (_, key: string) => {
-  return licenseManager.verifyLicense(key)
+safeHandle('license:verify', () => {
+  return {
+    isValid: true,
+    type: 'svip',
+    expireDate: null,
+    machineId: 'license-disabled'
+  }
 })
 
 safeHandle('license:getMachineId', () => {
-  return licenseManager.getMachineId()
+  return 'license-disabled'
 })
 
 safeHandle('license:isActivated', () => {
-  return licenseManager.isActivated()
+  return true
 })
 
 // === AI IPC ===

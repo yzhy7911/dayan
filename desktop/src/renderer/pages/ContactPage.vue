@@ -1,6 +1,5 @@
 <template>
   <div class="contact-page">
-    <!-- SVIP Banner -->
     <div class="svip-banner surface-panel">
       <div class="banner-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -13,7 +12,6 @@
         <h3 class="banner-title">联系人画像</h3>
         <p class="banner-desc">沉淀聊天记录、识别沟通风格，并形成可复用的关系档案。</p>
       </div>
-      <button class="upgrade-btn">SVIP 权限</button>
     </div>
 
     <!-- 联系人列表 -->

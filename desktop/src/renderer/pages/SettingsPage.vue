@@ -19,9 +19,131 @@
           <strong class="hero-status-value">{{ exportSize }}</strong>
         </div>
         <div class="hero-status-item">
-          <span class="hero-status-label">授权</span>
-          <strong class="hero-status-value">{{ currentLicense.isValid ? getLicenseTypeName(currentLicense.type) : '未激活' }}</strong>
+          <span class="hero-status-label">版本</span>
+          <strong class="hero-status-value">已开放</strong>
         </div>
+      </div>
+    </section>
+
+    <section class="settings-card surface-panel">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">Model</p>
+          <h3 class="section-title">AI 模型配置</h3>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">API 服务商</label>
+        <select v-model="settings.provider" class="form-select">
+          <option
+            v-for="option in providerOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+        <div class="provider-help">
+          <span class="form-hint">
+            推荐新手选择 DeepSeek：注册并填写 API Key 后可直接使用。
+          </span>
+          <button
+            v-if="currentRegisterUrl"
+            type="button"
+            class="btn btn-secondary provider-link-btn"
+            @click="openRegisterPage"
+          >
+            注册地址
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">API Key</label>
+        <div class="input-with-icon">
+          <input
+            v-model="settings.apiKey"
+            :type="showApiKey ? 'text' : 'password'"
+            class="form-input"
+            placeholder="sk-..."
+          />
+          <button
+            type="button"
+            class="icon-btn"
+            @click="showApiKey = !showApiKey"
+            :title="showApiKey ? '隐藏密钥' : '显示密钥'"
+          >
+            {{ showApiKey ? '隐藏' : '显示' }}
+          </button>
+        </div>
+        <p class="form-hint">密钥仅保存在本地，不会被上传。</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">API 地址</label>
+        <input
+          v-model="settings.baseUrl"
+          type="text"
+          class="form-input"
+          placeholder="https://api.openai.com/v1"
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">模型名称</label>
+        <select
+          v-if="modelOptions.length > 0"
+          v-model="settings.model"
+          class="form-select"
+        >
+          <option v-for="name in modelOptions" :key="name" :value="name">
+            {{ name }}
+          </option>
+        </select>
+        <input
+          v-else
+          v-model="settings.model"
+          type="text"
+          class="form-input"
+          :placeholder="modelInputPlaceholder"
+        />
+        <div class="model-actions">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            :class="{ loading: isLoadingModels }"
+            :disabled="isLoadingModels || !settings.apiKey"
+            @click="refreshModelOptions()"
+          >
+            {{ isLoadingModels ? '拉取中...' : '拉取模型' }}
+          </button>
+          <span v-if="modelsLoadTip" class="form-hint">{{ modelsLoadTip }}</span>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="btn btn-secondary" @click="resetToDefault">恢复默认</button>
+        <button
+          class="btn btn-secondary"
+          :class="{ loading: isTesting }"
+          :disabled="isTesting || !settings.apiKey"
+          @click="testConnection"
+        >
+          {{ isTesting ? '测试中...' : '测试连接' }}
+        </button>
+        <button
+          class="btn btn-primary"
+          :class="{ loading: isSaving }"
+          :disabled="isSaving"
+          @click="saveSettings"
+        >
+          {{ isSaving ? '保存中...' : '保存配置' }}
+        </button>
+      </div>
+
+      <div v-if="testResult" class="test-result" :class="testResult.success ? 'success' : 'error'">
+        <span class="result-text">{{ testResult.message }}</span>
       </div>
     </section>
 
@@ -122,90 +244,6 @@
     <section class="settings-card surface-panel">
       <div class="section-head">
         <div>
-          <p class="section-kicker">Model</p>
-          <h3 class="section-title">AI 模型配置</h3>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">API 服务商</label>
-        <select v-model="settings.provider" class="form-select">
-          <option value="openai">OpenAI</option>
-          <option value="qwen">通义千问 (阿里云)</option>
-          <option value="deepseek">DeepSeek</option>
-          <option value="custom">自定义</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">API Key</label>
-        <div class="input-with-icon">
-          <input
-            v-model="settings.apiKey"
-            :type="showApiKey ? 'text' : 'password'"
-            class="form-input"
-            placeholder="sk-..."
-          />
-          <button
-            type="button"
-            class="icon-btn"
-            @click="showApiKey = !showApiKey"
-            :title="showApiKey ? '隐藏密钥' : '显示密钥'"
-          >
-            {{ showApiKey ? '隐藏' : '显示' }}
-          </button>
-        </div>
-        <p class="form-hint">密钥仅保存在本地，不会被上传。</p>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">API 地址</label>
-        <input
-          v-model="settings.baseUrl"
-          type="text"
-          class="form-input"
-          placeholder="https://api.openai.com/v1"
-        />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">模型名称</label>
-        <input
-          v-model="settings.model"
-          type="text"
-          class="form-input"
-          placeholder="gpt-4o-mini"
-        />
-      </div>
-
-      <div class="button-group">
-        <button class="btn btn-secondary" @click="resetToDefault">恢复默认</button>
-        <button
-          class="btn btn-secondary"
-          :class="{ loading: isTesting }"
-          :disabled="isTesting || !settings.apiKey"
-          @click="testConnection"
-        >
-          {{ isTesting ? '测试中...' : '测试连接' }}
-        </button>
-        <button
-          class="btn btn-primary"
-          :class="{ loading: isSaving }"
-          :disabled="isSaving"
-          @click="saveSettings"
-        >
-          {{ isSaving ? '保存中...' : '保存配置' }}
-        </button>
-      </div>
-
-      <div v-if="testResult" class="test-result" :class="testResult.success ? 'success' : 'error'">
-        <span class="result-text">{{ testResult.message }}</span>
-      </div>
-    </section>
-
-    <section class="settings-card surface-panel">
-      <div class="section-head">
-        <div>
           <p class="section-kicker">Prompt</p>
           <h3 class="section-title">自定义系统提示</h3>
         </div>
@@ -224,62 +262,6 @@
 
       <div class="button-group">
         <button class="btn btn-secondary" @click="resetPrompt">恢复默认</button>
-      </div>
-    </section>
-
-    <section class="settings-card surface-panel">
-      <div class="section-head">
-        <div>
-          <p class="section-kicker">License</p>
-          <h3 class="section-title">授权信息</h3>
-        </div>
-      </div>
-
-      <div v-if="currentLicense.isValid" class="license-info">
-        <div class="license-status active">
-          <span class="status-text">已激活</span>
-        </div>
-        <div class="license-detail">
-          <span class="detail-label">版本类型</span>
-          <span class="detail-value" :class="currentLicense.type">{{ getLicenseTypeName(currentLicense.type) }}</span>
-        </div>
-        <div v-if="currentLicense.expireDate" class="license-detail">
-          <span class="detail-label">到期时间</span>
-          <span class="detail-value">{{ formatDate(currentLicense.expireDate) }}</span>
-        </div>
-        <button class="btn btn-secondary" @click="showLicenseInput = true">更换激活码</button>
-      </div>
-
-      <div v-else class="license-input-area">
-        <div class="license-status">
-          <span class="status-text">未激活</span>
-        </div>
-
-        <div v-if="showLicenseInput" class="form-group">
-          <label class="form-label">输入激活码</label>
-          <input
-            v-model="licenseKey"
-            type="text"
-            class="form-input"
-            placeholder="请输入激活码..."
-            @keyup.enter="activateLicense"
-          />
-          <p class="form-hint">机器码：{{ machineId }}</p>
-        </div>
-
-        <div class="button-group">
-          <button v-if="!showLicenseInput" class="btn btn-primary" @click="showLicenseInput = true">
-            输入激活码
-          </button>
-          <button v-else class="btn btn-primary" :class="{ loading: isActivating }" :disabled="isActivating || !licenseKey" @click="activateLicense">
-            {{ isActivating ? '激活中...' : '立即激活' }}
-          </button>
-          <button v-if="showLicenseInput" class="btn btn-secondary" @click="cancelActivation">取消</button>
-        </div>
-
-        <div v-if="activationResult" class="test-result" :class="activationResult.success ? 'success' : 'error'">
-          <span class="result-text">{{ activationResult.message }}</span>
-        </div>
       </div>
     </section>
 
@@ -379,24 +361,11 @@
       </div>
     </section>
 
-    <section class="about-card surface-panel">
-      <div class="section-head">
-        <div>
-          <p class="section-kicker">About</p>
-          <h3 class="section-title">产品信息</h3>
-        </div>
-      </div>
-      <div class="about-info">
-        <p class="app-name">搭言</p>
-        <p class="app-version">Version 1.0.0</p>
-        <p class="app-desc">桌面沟通工作台</p>
-      </div>
-    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { getAIConfig, saveAIConfig, DEFAULT_CONFIG } from '../utils/storage'
 import { getTheme, saveTheme, applyTheme } from '../utils/theme'
 import { StyleLearner } from '../utils/style-learning'
@@ -412,6 +381,75 @@ const settings = ref({
   model: 'gpt-3.5-turbo'
 })
 
+type ProviderMeta = {
+  label: string
+  baseUrl: string
+  defaultModel: string
+  registerUrl: string
+}
+
+const providerMeta: Record<string, ProviderMeta> = {
+  openai: {
+    label: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModel: 'gpt-4o-mini',
+    registerUrl: 'https://platform.openai.com/signup'
+  },
+  deepseek: {
+    label: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com',
+    defaultModel: 'deepseek-v4-flash',
+    registerUrl: 'https://platform.deepseek.com'
+  },
+  qwen: {
+    label: '通义千问 (阿里云)',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    defaultModel: 'qwen-plus',
+    registerUrl: 'https://dashscope.console.aliyun.com'
+  },
+  zhipu: {
+    label: '智谱 AI',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    defaultModel: 'glm-4-flash',
+    registerUrl: 'https://open.bigmodel.cn'
+  },
+  moonshot: {
+    label: 'Moonshot (Kimi)',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    defaultModel: 'moonshot-v1-8k',
+    registerUrl: 'https://platform.moonshot.cn'
+  },
+  baichuan: {
+    label: '百川智能',
+    baseUrl: 'https://api.baichuan-ai.com/v1',
+    defaultModel: 'Baichuan4',
+    registerUrl: 'https://platform.baichuan-ai.com'
+  }
+}
+
+const providerOptions = computed(() => [
+  { value: 'deepseek', label: providerMeta.deepseek.label },
+  { value: 'openai', label: providerMeta.openai.label },
+  { value: 'qwen', label: providerMeta.qwen.label },
+  { value: 'zhipu', label: providerMeta.zhipu.label },
+  { value: 'moonshot', label: providerMeta.moonshot.label },
+  { value: 'baichuan', label: providerMeta.baichuan.label },
+  { value: 'custom', label: '自定义' }
+])
+
+const modelOptions = ref<string[]>([])
+const isLoadingModels = ref(false)
+const modelsLoadTip = ref('')
+
+const currentProviderMeta = computed(() => providerMeta[settings.value.provider] || null)
+const currentRegisterUrl = computed(() => currentProviderMeta.value?.registerUrl || '')
+const modelInputPlaceholder = computed(() => {
+  if (currentProviderMeta.value) {
+    return currentProviderMeta.value.defaultModel
+  }
+  return '请输入模型名称'
+})
+
 const isSaving = ref(false)
 const isTesting = ref(false)
 const showApiKey = ref(false)
@@ -424,17 +462,6 @@ const shortcutConfig = ref({
   toggleWindow: 'CommandOrControl+Shift+S',
   quickReply: 'CommandOrControl+Shift+R',
   quickPolish: 'CommandOrControl+Shift+P'
-})
-
-const showLicenseInput = ref(false)
-const licenseKey = ref('')
-const isActivating = ref(false)
-const machineId = ref('')
-const activationResult = ref<{ success: boolean; message: string } | null>(null)
-const currentLicense = ref({
-  isValid: false,
-  type: 'free' as const,
-  expireDate: null as string | null
 })
 
 const styleStats = computed(() => StyleLearner.getStyleStats())
@@ -539,7 +566,6 @@ const resetPrompt = () => {
 
 onMounted(async () => {
   await loadSettings()
-  await loadLicenseInfo()
   await loadShortcuts()
   await syncDockStatus()
   loadCustomPrompt()
@@ -646,7 +672,84 @@ const loadSettings = async () => {
   console.log('[Settings] 📂 从本地存储加载配置...')
   const saved = getAIConfig()
   settings.value = { ...settings.value, ...saved }
+  const currentProvider = settings.value.provider
+  if (providerMeta[currentProvider]) {
+    settings.value.baseUrl = providerMeta[currentProvider].baseUrl
+    if (!settings.value.model) {
+      settings.value.model = providerMeta[currentProvider].defaultModel
+    }
+  }
+  await refreshModelOptions(false)
   console.log('[Settings] ✅ 配置加载完成')
+}
+
+const applyProviderDefaults = () => {
+  const meta = providerMeta[settings.value.provider]
+  if (!meta) return
+
+  settings.value.baseUrl = meta.baseUrl
+  if (!settings.value.model || settings.value.model === getAIConfig().model) {
+    settings.value.model = meta.defaultModel
+  }
+}
+
+const openRegisterPage = () => {
+  if (!currentRegisterUrl.value) return
+  window.open(currentRegisterUrl.value, '_blank')
+}
+
+const refreshModelOptions = async (showToast = true) => {
+  const apiKey = settings.value.apiKey.trim()
+  const baseUrl = settings.value.baseUrl.trim()
+  const provider = settings.value.provider
+
+  modelOptions.value = []
+  modelsLoadTip.value = ''
+
+  if (!provider || provider === 'custom') return
+  if (!baseUrl || !apiKey) {
+    settings.value.model = settings.value.model || (providerMeta[provider]?.defaultModel || settings.value.model)
+    return
+  }
+
+  isLoadingModels.value = true
+
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`
+      }
+    })
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`)
+    }
+
+    const data = await res.json() as { data?: Array<{ id?: string }> }
+    const models = Array.isArray(data?.data)
+      ? data.data.map(item => item?.id).filter((id): id is string => !!id)
+      : []
+
+    if (models.length > 0) {
+      modelOptions.value = models
+      if (!models.includes(settings.value.model)) {
+        settings.value.model = models[0]
+      }
+      modelsLoadTip.value = `已从 ${providerMeta[provider]?.label || provider} 拉取 ${models.length} 个模型`
+      if (showToast) toast.success('模型列表已更新')
+    } else {
+      throw new Error('模型列表为空')
+    }
+  } catch (error: any) {
+    const fallback = providerMeta[provider]?.defaultModel
+    if (fallback) settings.value.model = fallback
+    modelOptions.value = fallback ? [fallback] : []
+    modelsLoadTip.value = `拉取模型失败，已使用默认模型：${settings.value.model}`
+    if (showToast) toast.error('模型拉取失败，已切换默认模型')
+    console.warn('[Settings] 拉取模型失败:', error?.message || error)
+  } finally {
+    isLoadingModels.value = false
+  }
 }
 
 const toggleDarkMode = () => {
@@ -752,73 +855,6 @@ const toggleAlwaysOnTop = async () => {
   }
 }
 
-const loadLicenseInfo = async () => {
-  try {
-    machineId.value = await window.electronAPI?.license?.getMachineId?.() || ''
-    const isActivated = await window.electronAPI?.license?.isActivated?.()
-    currentLicense.value.isValid = isActivated
-  } catch (e) {
-    console.error('[Settings] 加载授权信息失败:', e)
-  }
-}
-
-const activateLicense = async () => {
-  if (!licenseKey.value.trim()) return
-
-  isActivating.value = true
-  activationResult.value = null
-
-  try {
-    const result = await window.electronAPI?.license?.verify?.(licenseKey.value.trim())
-    if (result?.isValid) {
-      currentLicense.value = result
-      activationResult.value = {
-        success: true,
-        message: '激活成功！'
-      }
-      showLicenseInput.value = false
-      licenseKey.value = ''
-    } else {
-      activationResult.value = {
-        success: false,
-        message: '激活失败，请检查激活码是否正确'
-      }
-    }
-  } catch (e) {
-    activationResult.value = {
-      success: false,
-      message: '激活失败: ' + (e as Error).message
-    }
-    console.error('[Settings] 激活失败:', e)
-  } finally {
-    isActivating.value = false
-  }
-}
-
-const cancelActivation = () => {
-  showLicenseInput.value = false
-  licenseKey.value = ''
-  activationResult.value = null
-}
-
-const getLicenseTypeName = (type: string) => {
-  const names: Record<string, string> = {
-    free: '免费版',
-    pro: 'Pro 专业版',
-    svip: 'SVIP 超级会员'
-  }
-  return names[type] || type
-}
-
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  })
-}
-
 const resetToDefault = () => {
   settings.value = {
     provider: DEFAULT_CONFIG.ai_provider,
@@ -826,9 +862,17 @@ const resetToDefault = () => {
     baseUrl: DEFAULT_CONFIG.ai_base_url,
     model: DEFAULT_CONFIG.ai_model
   }
+  modelOptions.value = []
+  modelsLoadTip.value = ''
   testResult.value = null
   console.log('[Settings] 🔄 已恢复默认配置')
 }
+
+watch(() => settings.value.provider, async (provider, oldProvider) => {
+  if (!provider || provider === oldProvider) return
+  applyProviderDefaults()
+  await refreshModelOptions(false)
+})
 </script>
 
 <style scoped>
@@ -1014,6 +1058,45 @@ const resetToDefault = () => {
   line-height: 1.5;
 }
 
+.provider-help {
+  margin-top: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.provider-help .form-hint {
+  margin-top: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.provider-link-btn {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  min-height: 32px;
+  min-width: 88px;
+  padding: 0 12px;
+  white-space: nowrap;
+  word-break: keep-all;
+  writing-mode: horizontal-tb;
+}
+
+.model-actions {
+  margin-top: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.model-actions .btn {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 12px;
+}
+
 .button-group {
   display: flex;
   gap: var(--space-3);
@@ -1032,6 +1115,13 @@ const resetToDefault = () => {
 .btn.loading {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .provider-help {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .shortcut-grid {

@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>搭言 Desk - 官方网站</title>
+  <meta name="description" content="搭言 Desk：桌面 AI 聊天伴侣。识别对话、分析局势、生成可发送回复。永久免费、无广告、无套路。">
+  <style>
+    :root {
+      --bg: #f5f3ee;
+      --surface: #ffffff;
+      --text: #1f2328;
+      --muted: #5e6672;
+      --line: #e4e0d8;
+      --brand: #0f8f86;
+      --brand-dark: #0b7069;
+      --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
+    a { color: inherit; text-decoration: none; }
+    .container { width: min(var(--max), 92vw); margin: 0 auto; }
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(8px);
+      background: rgba(245, 243, 238, 0.9);
+      border-bottom: 1px solid var(--line);
+    }
+    .topbar-inner {
+      height: 64px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; }
+    .brand img { width: 34px; height: 34px; border-radius: 10px; }
+    .nav { display: flex; gap: 20px; color: var(--muted); font-size: 14px; }
+    .nav a:hover { color: var(--text); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 40px; padding: 0 18px; border-radius: 10px; border: 1px solid transparent;
+      font-weight: 600; cursor: pointer;
+    }
+    .btn-primary { background: linear-gradient(135deg, var(--brand), #1a7da3); color: #fff; }
+    .btn-primary:hover { background: linear-gradient(135deg, var(--brand-dark), #186f8f); }
+    .btn-secondary { background: var(--surface); border-color: var(--line); color: var(--text); }
+
+    .hero {
+      min-height: 76vh;
+      display: flex;
+      align-items: center;
+      background-image:
+        radial-gradient(circle at 20% 10%, rgba(34, 197, 190, 0.35), transparent 35%),
+        radial-gradient(circle at 78% 80%, rgba(45, 127, 201, 0.28), transparent 30%),
+        linear-gradient(160deg, #0f172a 0%, #111827 48%, #1f2937 100%);
+      background-size: cover;
+      background-position: center;
+    }
+    .hero-content { max-width: 700px; color: #fff; padding: 72px 0; }
+    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0; opacity: .88; }
+    h1 { margin: 10px 0 16px; font-size: clamp(30px, 6vw, 52px); line-height: 1.12; }
+    .hero p { margin: 0 0 24px; font-size: clamp(15px, 2.6vw, 20px); line-height: 1.6; color: rgba(255,255,255,.92); }
+    .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    .section { padding: 68px 0; border-bottom: 1px solid var(--line); }
+    .section h2 { margin: 0 0 12px; font-size: clamp(24px, 4.8vw, 34px); }
+    .section .lead { margin: 0; color: var(--muted); line-height: 1.75; }
+
+    .feature-grid {
+      margin-top: 28px;
+      display: grid; gap: 14px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .feature {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px;
+      min-height: 148px;
+    }
+    .feature h3 { margin: 0 0 8px; font-size: 18px; }
+    .feature p { margin: 0; color: var(--muted); line-height: 1.7; }
+
+    .scenario-list { margin-top: 24px; display: grid; gap: 12px; }
+    .scenario-item {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .scenario-item strong { display: block; margin-bottom: 6px; font-size: 16px; }
+    .scenario-item span { color: var(--muted); line-height: 1.7; }
+
+    .download {
+      display: grid; gap: 20px; grid-template-columns: 1.3fr 1fr;
+      align-items: stretch;
+    }
+    .download .panel, .support .panel {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px;
+    }
+    .version { margin-top: 8px; font-size: 14px; color: var(--muted); }
+    .download-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .support {
+      display: grid; gap: 20px; grid-template-columns: 1.4fr 1fr;
+      align-items: start;
+    }
+    .support p { margin: 0 0 12px; line-height: 1.8; color: var(--muted); }
+    .support .highlight { color: var(--text); font-weight: 700; }
+
+    .qrcode-wrap {
+      display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .qrcode {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .qrcode img { width: 100%; display: block; }
+    .qrcode .name { padding: 10px; font-size: 14px; font-weight: 600; text-align: center; }
+
+    .faq { display: grid; gap: 10px; margin-top: 24px; }
+    .faq details {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    }
+    .faq summary { cursor: pointer; font-weight: 600; }
+    .faq p { margin: 10px 0 0; color: var(--muted); line-height: 1.7; }
+
+    .footer { padding: 28px 0 40px; color: var(--muted); font-size: 14px; text-align: center; }
+
+    @media (max-width: 980px) {
+      .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .download, .support { grid-template-columns: 1fr; }
+      .shot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .nav { display: none; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .shot-grid { grid-template-columns: 1fr; }
+      .qrcode-wrap { grid-template-columns: 1fr; }
+      .hero { min-height: 64vh; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <img src="../desktop/build/icon.png" alt="搭言 Logo">
+        <span>搭言 Desk</span>
+      </div>
+      <nav class="nav">
+        <a href="#features">功能</a>
+        <a href="#scenarios">场景</a>
+        <a href="#download">下载</a>
+        <a href="#support">支持开发者</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container hero-content">
+      <div class="eyebrow">OFFICIAL WEBSITE</div>
+      <h1>让每一次难回复，变成可发送的下一句。</h1>
+      <p>搭言是桌面 AI 聊天伴侣，帮你从聊天内容中快速提取上下文，分析局势，并生成自然、可发、贴近真实沟通的回复。</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#download">立即下载</a>
+        <a class="btn btn-secondary" href="#features">查看功能</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="section">
+    <div class="container">
+      <h2>核心功能</h2>
+      <p class="lead">不是只给你“建议”，而是围绕真实聊天工作流，提供从输入到输出的一整套效率工具。</p>
+      <div class="feature-grid">
+        <article class="feature">
+          <h3>回复工作台</h3>
+          <p>支持文本输入、图片粘贴、剪贴板监听，自动整理上下文并生成多条候选回复。</p>
+        </article>
+        <article class="feature">
+          <h3>聊天军师</h3>
+          <p>看懂对方意图、识别风险，给出策略与可发送话术，复杂局面也能稳定推进。</p>
+        </article>
+        <article class="feature">
+          <h3>通话军师</h3>
+          <p>支持离线语音听写，把“现场转述”实时变成可分析文本，沟通不中断。</p>
+        </article>
+        <article class="feature">
+          <h3>知识库与话术本</h3>
+          <p>知识库负责依据，话术本负责标准回答，帮助团队形成可复用的表达资产。</p>
+        </article>
+        <article class="feature">
+          <h3>联系人画像</h3>
+          <p>沉淀单个对象历史对话，辅助后续回复与策略判断，越用越懂对方。</p>
+        </article>
+        <article class="feature">
+          <h3>快慢机模式</h3>
+          <p>快速 / 标准 / 深度三档选择，赶时间先出句，关键场景再精细推理。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="scenarios" class="section">
+    <div class="container">
+      <h2>适用场景</h2>
+      <p class="lead">从销售跟进到关系沟通，搭言都在做一件事：让你更快、更稳地表达。</p>
+      <div class="scenario-list">
+        <div class="scenario-item">
+          <strong>销售沟通</strong>
+          <span>客户提问来得快，先快速生成可发回复，再按需求切深度分析完善话术。</span>
+        </div>
+        <div class="scenario-item">
+          <strong>客服承接</strong>
+          <span>统一口径可复用，复杂问题有依据可查，减少临场失误和重复劳动。</span>
+        </div>
+        <div class="scenario-item">
+          <strong>关系对话</strong>
+          <span>遇到高情绪对话时，先看清意图与风险，再决定下一句怎么说。</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="product-shots" class="section">
+    <div class="container">
+      <h2>产品实机界面</h2>
+      <p class="lead">核心模块统一在同一套工作台中，减少来回切换。下面展示回复、军师、联系人、润色、话术、历史、设置、关于版面。</p>
+      <div class="shot-grid">
+        <article class="shot-card">
+          <img src="./assets/reply.png" alt="智能回复页面">
+          <div class="shot-caption">智能回复</div>
+        </article>
+        <article class="shot-card">
+          <img src="./assets/coach.png" alt="聊天军师页面">
+          <div class="shot-caption">聊天军师</div>
+        </article>
+        <article class="shot-card">
+          <img src="./assets/contact.png" alt="联系人画像页面">
+          <div class="shot-caption">联系人画像</div>
+        </article>
+        <article class="shot-card">
+          <img src="./assets/polish.png" alt="文本润色页面">
+          <div class="shot-caption">文本润色</div>
+        </article>
+        <article class="shot-card">
+          <img src="./assets/knowledge.png" alt="话术库页面">
+          <div class="shot-caption">话术库</div>
+        </article>
+        <article class="shot-card">
+          <img src="./assets/history.png" alt="历史记录页面">
+          <div class="shot-caption">历史记录</div>
+        </article>
+        <article class="shot-card">
+          <img src="./assets/settings.png" alt="系统设置页面">
+          <div class="shot-caption">系统设置</div>
+        </article>
+        <article class="shot-card">
+          <img src="./assets/about.png" alt="关于页面">
+          <div class="shot-caption">关于页面</div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="download" class="section">
+    <div class="container download">
+      <div class="panel">
+        <h2>下载与版本</h2>
+        <p class="lead">Windows 安装包已支持 x64 与 arm64。macOS 版本可在桌面端构建产物中获取。</p>
+        <p class="version">当前版本：v1.0.0</p>
+        <div class="download-actions">
+          <a class="btn btn-primary" href="../desktop/release/%E6%90%AD%E8%A8%80%20Setup%201.0.0-x64.exe">下载 Windows x64</a>
+          <a class="btn btn-secondary" href="../desktop/release/%E6%90%AD%E8%A8%80%20Setup%201.0.0-arm64.exe">下载 Windows arm64</a>
+        </div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">安装说明</h3>
+        <p class="lead">首次使用只需配置模型接口（API Key、Base URL、模型名），即可开始使用回复与军师功能。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="support" class="section">
+    <div class="container support">
+      <div class="panel">
+        <h2>关于与支持</h2>
+        <p class="highlight">本桌面 AI 聊天伴侣永久免费使用、无广告、无套路、不阉割基础功能。</p>
+        <p>软件由个人业余独立开发、自费维护更新，持续优化体验与新功能迭代。</p>
+        <p>如果你觉得这款软件对你有帮助、用得喜欢，可以下方扫码自愿随缘小额打赏，仅作为对开发者的创作鼓励。</p>
+        <p class="highlight">郑重说明：</p>
+        <p>所有打赏完全自愿，不标价、不强制、不解锁任何功能，不属于商品交易与经营性付费，纯粹是善意支持。</p>
+        <p>感谢每一位愿意认可与鼓励我的朋友！</p>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">收款码</h3>
+        <div class="qrcode-wrap">
+          <div class="qrcode">
+            <img src="../desktop/src/renderer/assets/alipay.jpg" alt="支付宝收款码">
+            <div class="name">支付宝</div>
+          </div>
+          <div class="qrcode">
+            <img src="../desktop/src/renderer/assets/wechat.jpg" alt="微信收款码">
+            <div class="name">微信支付</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" style="border-bottom:none; padding-top:54px;">
+    <div class="container">
+      <h2>常见问题</h2>
+      <div class="faq">
+        <details>
+          <summary>数据会上传吗？</summary>
+          <p>本地数据优先存储。发送给大模型的内容仅来自你主动触发的生成或分析请求。</p>
+        </details>
+        <details>
+          <summary>是否支持离线语音？</summary>
+          <p>支持。通话军师可使用本地离线语音识别方案，不依赖云端语音计费。</p>
+        </details>
+        <details>
+          <summary>是否有会员限制？</summary>
+          <p>当前版本坚持永久免费、无广告、无套路，不通过会员阉割基础功能。</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">© <span id="year"></span> 搭言 Desk. All rights reserved.</div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
+    .shot-grid {
+      margin-top: 26px;
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .shot-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .shot-card img {
+      width: 100%;
+      display: block;
+      aspect-ratio: 3 / 5;
+      object-fit: cover;
+      background: #e9e4da;
+    }
+    .shot-caption {
+      padding: 10px 12px;
+      font-size: 14px;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+    }

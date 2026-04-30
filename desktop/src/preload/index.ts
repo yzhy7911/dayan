@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setAlwaysOnTop: (alwaysOnTop: boolean) => ipcRenderer.invoke('window:setAlwaysOnTop', alwaysOnTop)
   },
 
+  app: {
+    getVersion: () => ipcRenderer.invoke('app:getVersion')
+  },
+
   clipboard: {
     getText: () => ipcRenderer.invoke('clipboard:getText'),
     setText: (text: string) => ipcRenderer.invoke('clipboard:setText', text),
@@ -82,6 +86,9 @@ declare global {
         checkWeChat: () => Promise<boolean>
         getDockStatus: () => Promise<{ enabled: boolean; wechatFound: boolean; platform: string; side: string | null }>
         setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<void>
+      }
+      app: {
+        getVersion: () => Promise<string>
       }
       clipboard: {
         getText: () => Promise<string>
