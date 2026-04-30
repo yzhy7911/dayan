@@ -1,10 +1,7 @@
 import { ipcMain, IpcMainInvokeEvent, app } from 'electron'
-import * as ort from 'onnxruntime-node'
-import { PaddleOcrService } from 'paddleocr'
 import { logger } from './logger'
 import * as path from 'path'
 import * as fs from 'fs'
-import sharp from 'sharp'
 
 interface OCRLine {
   text: string
@@ -25,11 +22,13 @@ interface OCRRecognizeResult {
 }
 
 class OCRService {
-  private ocrService: PaddleOcrService | null = null
+  private ocrService: any = null
   private isInitialized = false
+  private sharp: any = null
 
   private findModelPath(modelName: string): string | null {
     const possiblePaths = [
+      path.join(process.resourcesPath || '', 'models', modelName),
       path.join(__dirname, '../../models', modelName),
       path.join(app.getAppPath(), 'models', modelName),
       path.join(process.cwd(), 'models', modelName),
@@ -96,6 +95,10 @@ class OCRService {
       const detBuffer = await this.loadModelBuffer(detPath)
       const recBuffer = await this.loadModelBuffer(recPath)
       const dictionary = await this.loadDictionary(dictPath)
+      const [{ PaddleOcrService }, ort] = await Promise.all([
+        import('paddleocr'),
+        import('onnxruntime-node')
+      ])
 
       logger.info('OCR', `字符字典加载成功，共 ${dictionary.length} 个字符`)
 
@@ -152,7 +155,8 @@ class OCRService {
       }
 
       let image: Buffer
-      let metadata: sharp.Metadata
+      let metadata: any
+      const sharp = await this.loadSharp()
 
       try {
         metadata = await sharp(rawBuffer).metadata()
@@ -209,6 +213,7 @@ class OCRService {
   }
 
   registerIPC(): void {
+    ipcMain.removeHandler('ocr:recognize')
     ipcMain.handle('ocr:recognize', async (_event: IpcMainInvokeEvent, buffer: Buffer) => {
       try {
         const result = await this.recognizeImage(buffer)
@@ -218,13 +223,22 @@ class OCRService {
       }
     })
 
+    ipcMain.removeHandler('ocr:hasImage')
     ipcMain.handle('ocr:hasImage', async () => {
       return this.isInitialized || this.hasModelFiles()
     })
 
+    ipcMain.removeHandler('ocr:getImage')
     ipcMain.handle('ocr:getImage', async () => {
       return null
     })
+  }
+
+  private async loadSharp() {
+    if (this.sharp) return this.sharp
+    const sharpModule = await import('sharp')
+    this.sharp = sharpModule.default || sharpModule
+    return this.sharp
   }
 }
 

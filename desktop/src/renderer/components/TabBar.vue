@@ -1,8 +1,9 @@
 <template>
   <nav class="tab-rail surface-panel">
     <div class="rail-top">
-      <div class="brand-monogram">DY</div>
-      <div class="brand-tag">Desk</div>
+      <img class="brand-logo" :src="appIcon" alt="搭言" />
+      <div class="brand-name">搭言</div>
+      <div class="brand-tag">工作台</div>
     </div>
 
     <div class="tab-list">
@@ -22,6 +23,7 @@
 
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
+import appIcon from '../../../build/icon.svg'
 
 const route = useRoute()
 const router = useRouter()
@@ -110,24 +112,26 @@ const switchTab = (path: string) => {
   gap: var(--space-2);
 }
 
-.brand-monogram {
+.brand-logo {
   width: 42px;
   height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 14px;
-  background: var(--primary-gradient);
-  color: var(--text-inverse);
-  font-size: var(--font-sm);
-  font-weight: 700;
+  display: block;
   box-shadow: 0 18px 32px rgba(15, 118, 110, 0.18);
 }
 
+.brand-name {
+  font-size: var(--font-xs);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
 .brand-tag {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  margin-top: -3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
   color: var(--text-tertiary);
 }
 
@@ -205,10 +209,18 @@ const switchTab = (path: string) => {
     border-radius: var(--radius-xl);
   }
 
-  .brand-monogram {
+  .brand-logo {
     width: 38px;
     height: 38px;
     border-radius: 13px;
+  }
+
+  .brand-name {
+    font-size: 11px;
+  }
+
+  .brand-tag {
+    font-size: 9px;
   }
 
   .tab-list {

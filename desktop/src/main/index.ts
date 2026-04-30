@@ -7,7 +7,6 @@ import { aiEngine } from './ai'
 import { logger } from './logger'
 import { errorMonitor } from './error-monitor'
 import { windowDockManager } from './window-dock'
-import { ocrManager } from './ocr'
 import { shortcutManager } from './shortcuts'
 import { asrManager } from './asr'
 
@@ -85,9 +84,15 @@ function createWindow() {
       }
     })
 
-    // OCR 管理器最晚初始化（低优先级）
+    // OCR 管理器最晚注册（低优先级），避免 native OCR 依赖阻塞应用启动
     setTimeout(() => {
-      ocrManager.init()
+      import('./ocr')
+        .then(({ ocrManager }) => {
+          ocrManager.registerIPC()
+        })
+        .catch((e) => {
+          logger.error('OCR', '注册 OCR 服务失败', e?.message || String(e))
+        })
     }, 2000)
   })
 
