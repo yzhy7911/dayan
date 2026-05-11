@@ -5,6 +5,7 @@
   "main": "dist/main/index.js",
   "author": "搭言团队",
   "license": "MIT",
+  "homepage": "https://github.com/yzhy7911/dayan",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -54,7 +55,6 @@
   "build": {
     "appId": "com.dayan.app",
     "productName": "搭言",
-    "homepage": "https://github.com/yzhy7911/dayan",
     "directories": {
       "output": "release"
     },
@@ -86,7 +86,9 @@
       "icon": "build/icon.icns"
     },
     "linux": {
-      "target": "deb",
+      "target": "deb"
+    },
+    "deb": {
       "maintainer": "搭言团队 <yzhy7911@gmail.com>"
     },
     "nsis": {
