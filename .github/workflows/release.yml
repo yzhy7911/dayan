@@ -36,13 +36,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build frontend
-        run: pnpm --filter dayan-desktop vite build
-
-      - name: Build ${{ matrix.platform }}
+      - name: Build
         run: |
           cd desktop
-          pnpm run build -- --${{ matrix.platform }}
+          ./node_modules/.bin/vite build
+          ./node_modules/.bin/electron-builder --${{ matrix.platform }}
 
       - name: Upload asset
         uses: softprops/action-gh-release@v2
