@@ -41,7 +41,8 @@ jobs:
       - name: Build
         run: |
           cd desktop
-          pnpm run build -- --${{ matrix.platform }}
+          pnpm exec vite build
+          pnpm exec electron-builder --${{ matrix.platform }}
 
       - name: Upload asset
         uses: softprops/action-gh-release@v2

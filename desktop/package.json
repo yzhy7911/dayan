@@ -84,6 +84,9 @@
       "target": "dmg",
       "icon": "build/icon.icns"
     },
+    "linux": {
+      "target": "deb"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
