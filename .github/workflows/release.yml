@@ -40,7 +40,7 @@ jobs:
         run: pnpm --filter dayan-desktop vite build
 
       - name: Build ${{ matrix.platform }}
-        run: pnpm --filter dayan-desktop electron-builder --${{ matrix.platform }}
+        run: pnpm exec electron-builder --${{ matrix.platform }}
 
       - name: Upload asset
         uses: softprops/action-gh-release@v2
