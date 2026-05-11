@@ -34,22 +34,15 @@ jobs:
         run: corepack enable && corepack prepare pnpm@9 --activate
 
       - name: Install dependencies
-        run: pnpm install
-
-      - name: Debug directory structure
         run: |
-          echo "=== root node_modules/.bin ==="
-          ls -la node_modules/.bin/ 2/| head -5 || echo "no root .bin"
-          echo "=== desktop node_modules/.bin ==="
-          ls -la desktop/node_modules/.bin/ 2>/dev/null | head -10 || echo "no desktop .bin"
-          echo "=== pnpm workspace structure ==="
-          find node_modules -maxdepth 2 -name ".bin" -type d 2>/dev/null | head -5
+          rm -f package.json pnpm-workspace.yaml
+          cd desktop
+          pnpm install
 
       - name: Build
         run: |
           cd desktop
-          ../../node_modules/.bin/vite build
-          ../../node_modules/.bin/electron-builder --${{ matrix.platform }}
+          pnpm run build -- --${{ matrix.platform }}
 
       - name: Upload asset
         uses: softprops/action-gh-release@v2
