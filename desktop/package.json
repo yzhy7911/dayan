@@ -54,6 +54,7 @@
   "build": {
     "appId": "com.dayan.app",
     "productName": "搭言",
+    "homepage": "https://github.com/yzhy7911/dayan",
     "directories": {
       "output": "release"
     },
@@ -85,7 +86,8 @@
       "icon": "build/icon.icns"
     },
     "linux": {
-      "target": "deb"
+      "target": "deb",
+      "maintainer": "搭言团队 <yzhy7911@gmail.com>"
     },
     "nsis": {
       "oneClick": false,
