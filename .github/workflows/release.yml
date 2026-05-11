@@ -32,13 +32,19 @@ jobs:
         run: corepack enable && corepack prepare pnpm@9 --activate
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          cd desktop
+          pnpm install --frozen-lockfile
 
       - name: Build frontend
-        run: pnpm vite build
+        run: |
+          cd desktop
+          pnpm vite build
 
       - name: Build ${{ matrix.platform }}
-        run: pnpm electron-builder --${{ matrix.platform }}
+        run: |
+          cd desktop
+          pnpm electron-builder --${{ matrix.platform }}
 
       - name: Upload asset
         uses: softprops/action-gh-release@v2
