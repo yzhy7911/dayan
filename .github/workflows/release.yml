@@ -39,8 +39,8 @@ jobs:
       - name: Build
         run: |
           cd desktop
-          ./node_modules/.bin/vite build
-          ./node_modules/.bin/electron-builder --${{ matrix.platform }}
+          npx vite build
+          npx electron-builder --${{ matrix.platform }}
 
       - name: Upload asset
         uses: softprops/action-gh-release@v2
