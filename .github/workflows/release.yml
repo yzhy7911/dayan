@@ -35,7 +35,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          rm -f package.json pnpm-workspace.yaml
           cd desktop
           pnpm install
 
